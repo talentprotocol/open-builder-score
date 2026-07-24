@@ -1,0 +1,57 @@
+{
+  "name": "Open Builder Score",
+  "version": "0.1.0-poc",
+  "description": "Open, deterministic builder reputation score computable client-side from public data. Weights carried over from Talent Protocol's finalized 2025 season.",
+  "constants": {
+    "SECONDS_IN_A_YEAR": 31536000
+  },
+  "scoring": {
+    "per_credential": "points = min(round(convert(value) * multiplier), max_score)",
+    "total": "sum of per-credential points",
+    "calculation_modes": {
+      "sum_all": "sum raw values across all connected accounts FIRST, then convert, then multiply",
+      "max_value": "convert and multiply per account, take the best account"
+    },
+    "conversions": {
+      "no_conversion": "identity",
+      "sqrt": "square root",
+      "log": "natural logarithm (ln)",
+      "timestamp_to_year": "(as_of_timestamp - value) / SECONDS_IN_A_YEAR, rounded to 2 decimals"
+    },
+    "determinism": "all values are read at an as-of anchor (timestamp + block number per chain); the anchor is included in any attestation"
+  },
+  "tiers": {
+    "rpc": "pure RPC reads (balanceOf, contract calls) — zero infrastructure",
+    "indexed": "requires a public indexer or token-metadata enumeration (EAS GraphQL, NFT metadata walk)",
+    "public_api": "keyless public HTTP API",
+    "github_public": "GitHub REST, unauthenticated (60 req/hr per IP)"
+  },
+  "credentials": [
+    { "slug": "eth_global_hacker", "name": "ETHGlobal Hacker", "tier": "rpc", "value": "nft_count", "max_score": 12, "multiplier": 12.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "eth_global_builder", "name": "ETHGlobal Builder", "tier": "rpc", "value": "nft_count", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "eth_global_pioneer", "name": "ETHGlobal Pioneer", "tier": "rpc", "value": "nft_count", "max_score": 10, "multiplier": 10.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "eth_global_partner", "name": "ETHGlobal Partner", "tier": "rpc", "value": "nft_count", "max_score": 12, "multiplier": 12.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "eth_global_finalist", "name": "ETHGlobal Finalist", "tier": "rpc", "value": "nft_count", "max_score": 10, "multiplier": 10.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "devfolio_hackathons_participation", "name": "Devfolio Hackathons Participation", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 10.0, "conversion": "sqrt", "calculation": "max_value", "poc": true },
+    { "slug": "devfolio_hackathons_won", "name": "Devfolio Hackathons Won", "tier": "indexed", "value": "distinct_contracts_with_winner_token", "max_score": 30, "multiplier": 15.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "same contracts as participation, filtered by token metadata attribute nft_type == WINNER — needs tokenURI enumeration" },
+    { "slug": "base_devfolio_hackathons_participation", "name": "Base Hackathons Participation", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 10.0, "conversion": "sqrt", "calculation": "max_value", "poc": true },
+    { "slug": "base_devfolio_hackathons_won", "name": "Base Hackathons Won", "tier": "indexed", "value": "distinct_contracts_with_winner_token", "max_score": 30, "multiplier": 15.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "WINNER metadata filter, as devfolio_hackathons_won" },
+    { "slug": "encode_programmes_participations", "name": "Encode Programmes Participation", "tier": "indexed", "value": "distinct_qualifying_programmes", "max_score": 20, "multiplier": 10.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "single contract; programme_type + accreditation_level read from token metadata — needs enumeration" },
+    { "slug": "encode_programmes_won", "name": "Encode Programmes Won", "tier": "indexed", "value": "distinct_winning_programmes", "max_score": 30, "multiplier": 15.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "metadata win-level filter" },
+    { "slug": "base_basecamp", "name": "Basecamp Attendee", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "base_learn", "name": "Base Learn", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 13, "multiplier": 1.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true, "notes": "13 SBTs on Base Sepolia (testnet!)" },
+    { "slug": "buidl_guidl_speedrun_ethereum", "name": "Speed Run Ethereum Challenges", "tier": "public_api", "value": "accepted_challenge_count", "max_score": 12, "multiplier": 1.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true, "notes": "NOT onchain — BuidlGuidl public API by wallet address; verify CORS, else defer" },
+    { "slug": "buidl_guidl_batches_graduate", "name": "BuidlGuidl Batches Graduate", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "farcaster_farcon_nyc_2025_attendee", "name": "Farcon NYC 2025 Attendee", "tier": "rpc", "value": "nft_count", "max_score": 12, "multiplier": 12.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "crypto_nomads_club", "name": "CNC Member", "tier": "rpc", "value": "nft_count", "max_score": 12, "multiplier": 12.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "developer_dao_member", "name": "D_D Member", "tier": "rpc", "value": "erc20_balance_whole_tokens", "max_score": 8, "multiplier": 0.02, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "talent_protocol_talent_holder", "name": "$TALENT Balance", "tier": "rpc", "value": "erc20_balance_whole_tokens", "max_score": 8, "multiplier": 0.03, "conversion": "sqrt", "calculation": "sum_all", "poc": true },
+    { "slug": "talent_vault", "name": "$TALENT Vault", "tier": "rpc", "value": "contract_call", "max_score": 8, "multiplier": 0.03, "conversion": "sqrt", "calculation": "sum_all", "poc": true },
+    { "slug": "talent_protocol_verified_builder", "name": "Verified Onchain Builder", "tier": "indexed", "value": "distinct_attesters", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "sum_all", "poc": true, "notes": "EAS attestations by recipient — enumeration needs the public EAS GraphQL indexer (easscan), not a raw RPC" },
+    { "slug": "github_account_age", "name": "GitHub Account Age", "tier": "github_public", "value": "created_at_unix_timestamp", "max_score": 8, "multiplier": 1.0, "conversion": "timestamp_to_year", "calculation": "max_value", "poc": true },
+    { "slug": "github_followers", "name": "GitHub Followers", "tier": "github_public", "value": "followers_count", "max_score": 6, "multiplier": 1.0, "conversion": "sqrt", "calculation": "max_value", "poc": true },
+    { "slug": "github_stars", "name": "GitHub Stars", "tier": "github_public", "value": "sum_stargazers_over_owned_repos", "max_score": 6, "multiplier": 0.5, "conversion": "sqrt", "calculation": "max_value", "poc": true },
+    { "slug": "github_forks", "name": "GitHub Forks", "tier": "github_public", "value": "sum_forks_over_owned_repos", "max_score": 12, "multiplier": 2.0, "conversion": "sqrt", "calculation": "sum_all", "poc": true },
+    { "slug": "github_repositories", "name": "GitHub Repositories", "tier": "github_public", "value": "public_repo_count", "max_score": 8, "multiplier": 2.0, "conversion": "sqrt", "calculation": "sum_all", "poc": true, "notes": "approximation — production counts repos contributed-to (needs auth); disclose in UI" }
+  ]
+}

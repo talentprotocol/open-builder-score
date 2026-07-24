@@ -1,0 +1,195 @@
+{
+  "version": "0.1.0-poc",
+  "source": "talent-api production TrackedNFT table + app/services/data_points/* (extracted 2026-07-24)",
+  "chains": {
+    "eth-mainnet": 1,
+    "opt-mainnet": 10,
+    "polygon-mainnet": 137,
+    "arb-mainnet": 42161,
+    "base-mainnet": 8453,
+    "base-sepolia": 84532,
+    "celo-mainnet": 42220
+  },
+  "credentials": {
+    "eth_global_hacker": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "ETHGlobal Hacker Pack", "chain": "opt-mainnet", "address": "0x32382a82d9fadc55f971f33daeee5841cfbadbe0" }
+      ]
+    },
+    "eth_global_builder": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "ETHGlobal Builder Pack", "chain": "opt-mainnet", "address": "0xe600a7ad9b86a2d949069a6092b7b5a1dae50e20" }
+      ]
+    },
+    "eth_global_partner": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "ETHGlobal Partner Pack", "chain": "opt-mainnet", "address": "0x27479dd41a85002f5987b8c7e999ca0e07dba817" }
+      ]
+    },
+    "eth_global_pioneer": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "ETHGlobal Pioneer Pack", "chain": "opt-mainnet", "address": "0x69b4e2bd6d5c5eeeb7e152fb9bc9b6c4364fa410" }
+      ]
+    },
+    "eth_global_finalist": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "ETHGlobal Cannes Finalist", "chain": "opt-mainnet", "address": "0xd33f107e1d1b3ff9fc57cc9d0c3e7b80ce9e6d07" },
+        { "name": "ETHGlobal Prague Finalist", "chain": "opt-mainnet", "address": "0x9c072dd888ada0c4314b1f78d695a503bebd9b4e" },
+        { "name": "ETHGlobal Taipei Finalist", "chain": "opt-mainnet", "address": "0xf1f0b74870b946a8cb96ced06749036b65f5018b" },
+        { "name": "ETHGlobal Trifecta Finalist", "chain": "opt-mainnet", "address": "0x75883f9158a11234e5d94ddedc23f431ce51aa1d" },
+        { "name": "Agentic Ethereum Finalist", "chain": "opt-mainnet", "address": "0x1da04f739e4b9cff65bd8d1ecb9adf15cc093f08" },
+        { "name": "ETHGlobal Bangkok Finalist", "chain": "opt-mainnet", "address": "0x148f46e97fb11e938ef291b72b9a8c858cd3c157" },
+        { "name": "ETHGlobal San Francisco Finalist", "chain": "opt-mainnet", "address": "0x778cca1bd0dd82ac049aecd1fa5f93c3a328954b" },
+        { "name": "ETHGlobal Singapore Finalist", "chain": "opt-mainnet", "address": "0xda9d339c9ef58db3e3af9667b1e68feb2815c972" },
+        { "name": "ETHGlobal ETHOnline Finalist", "chain": "opt-mainnet", "address": "0x09c2ffbb99fcccd62cfefc6356bd6846fb30153f" },
+        { "name": "ETHGlobal Superhack 2024 Finalist", "chain": "opt-mainnet", "address": "0x416784e5fcc0bb1e0d2f172a4ad3b1e937a42544" },
+        { "name": "ETHGlobal Brussels Finalist", "chain": "opt-mainnet", "address": "0x2ca7362ee7a3b5532d02fbc5927ca8b213d1c7ca" },
+        { "name": "ETHGlobal Frameworks Finalist", "chain": "opt-mainnet", "address": "0xe8bb0abd672d977acd06b68889bba46643d114a1" },
+        { "name": "ETHGlobal Circuit Breaker Finalist", "chain": "opt-mainnet", "address": "0xe2fb6b612a90d38e6183ff8a9323b2a13d9afa5d" },
+        { "name": "ETHGlobal LFGHO Finalist", "chain": "opt-mainnet", "address": "0x3c63848388ca9f98403aa5c5c0bb579bdff039bf" },
+        { "name": "ETHGlobal StarkHack Finalist", "chain": "opt-mainnet", "address": "0x9e4b7e7bca9389e44b7e7d789fc828819d7ec0a9" },
+        { "name": "ETHGlobal HackFS Finalist", "chain": "opt-mainnet", "address": "0x6f06173d2920d1b8a9a523132cfdc1c3debd1e71" },
+        { "name": "ETHGlobal Sydney Finalist", "chain": "opt-mainnet", "address": "0x85052af96ce5d90469a13bc69a618dc9a2d49ad6" },
+        { "name": "ETHGlobal Scaling Ethereum Finalist", "chain": "opt-mainnet", "address": "0x6f2942e1fb7737ec3d3b29bed92ff3e73601dcd3" },
+        { "name": "ETHGlobal London Finalist", "chain": "opt-mainnet", "address": "0xa94b0a0ad9485946a771acb89a7927923ddd389f" }
+      ]
+    },
+    "devfolio_hackathons_participation": {
+      "method": "distinct_contracts_owned",
+      "contracts": [
+        { "name": "ETHSF 2025", "chain": "base-mainnet", "address": "0x2cb02ffcad9d09a08a365e7fffd166ebb369318c" },
+        { "name": "ETHDenver 2025", "chain": "base-mainnet", "address": "0x7abe24c1568031401b2d0bad7d752779d22b1ffa" },
+        { "name": "ETHIndia 2024", "chain": "base-mainnet", "address": "0x49a650e8f1054b556bce815b12eff7dd8d9eeeaf" },
+        { "name": "U-Hack", "chain": "arb-mainnet", "address": "0x2d06b90ec8a3082adea993d99bc6e354fac78b04" },
+        { "name": "ETHDenver 2024", "chain": "arb-mainnet", "address": "0x93fd88df3e2a377c0f23bf22c1cfd87047818d20" },
+        { "name": "ETHMumbai 2024", "chain": "arb-mainnet", "address": "0xc051abb005ccf2eec5836a03f08591c22c2f3273" },
+        { "name": "ETHIndia 2023", "chain": "arb-mainnet", "address": "0xe34494de41383fbad7d1cdba6730d0e943425701" },
+        { "name": "Unfold 2023", "chain": "arb-mainnet", "address": "0x473a55f826b4805c779450a03d8ee7f79727af99" },
+        { "name": "ETHBarcelona 2023", "chain": "arb-mainnet", "address": "0x861f978a160270c495ff906db24afdb2199dcaf9" },
+        { "name": "ETHMunich 2023", "chain": "arb-mainnet", "address": "0x020c3a900fdbd33795d709e2b40a1f3510fbe1fc" },
+        { "name": "ETHernals", "chain": "polygon-mainnet", "address": "0x752ceec57492edb08a733284e372362c6d2ea385" }
+      ]
+    },
+    "devfolio_hackathons_won": {
+      "method": "distinct_contracts_with_winner_token",
+      "metadata_filter": { "trait_type": "nft_type", "value": "WINNER" },
+      "contracts": "same as devfolio_hackathons_participation"
+    },
+    "base_devfolio_hackathons_participation": {
+      "method": "distinct_contracts_owned",
+      "contracts": [
+        { "name": "Base Around The World", "chain": "base-mainnet", "address": "0x91f311e31319fe79d6aca4a898cd6a00e12c3d23" },
+        { "name": "Onchain Summer Buildathon", "chain": "base-mainnet", "address": "0x59ca61566c03a7fb8e4280d97bfa2e8e691da3a6" },
+        { "name": "Base Batches 2025", "chain": "base-mainnet", "address": "0x98d9d7b9556ebc8be8f10cd5b7148e9c8adf744e" }
+      ]
+    },
+    "base_devfolio_hackathons_won": {
+      "method": "distinct_contracts_with_winner_token",
+      "metadata_filter": { "trait_type": "nft_type", "value": "WINNER" },
+      "contracts": "same as base_devfolio_hackathons_participation"
+    },
+    "encode_programmes_participations": {
+      "method": "metadata_programme_filter",
+      "contracts": [
+        { "name": "Encode Club", "chain": "polygon-mainnet", "address": "0xdbf2138593aec61d55d86e80b8ed86d7b9ba51f5" }
+      ],
+      "notes": "programme_type + accreditation_level from token metadata; see DataPoints::EncodeProgrammesParticipations for the qualifying matrix"
+    },
+    "encode_programmes_won": {
+      "method": "metadata_programme_filter",
+      "contracts": [
+        { "name": "Encode Club", "chain": "polygon-mainnet", "address": "0xdbf2138593aec61d55d86e80b8ed86d7b9ba51f5" }
+      ],
+      "notes": "win-level accreditation values; see DataPoints::EncodeProgrammesWon"
+    },
+    "base_basecamp": {
+      "method": "distinct_contracts_owned",
+      "contracts": [
+        { "name": "Basecamp 001", "chain": "base-mainnet", "address": "0x05df46564c489a92492400298c88f032c8c21e96" },
+        { "name": "Basecamp 002", "chain": "base-mainnet", "address": "0xfb81b3bdbebebcceb8b3a380858006cb1799ddad" }
+      ]
+    },
+    "base_learn": {
+      "method": "distinct_contracts_owned",
+      "contracts": [
+        { "name": "Base Learn: ERC-721 Tokens", "chain": "base-sepolia", "address": "0x15534ed3d1dba55148695b2ba4164f147e47a10c" },
+        { "name": "Base Learn: Arrays", "chain": "base-sepolia", "address": "0x5b0f80ca6f5bd60cc3b64f0377f336b2b2a56cdf" },
+        { "name": "Base Learn: Control Structures", "chain": "base-sepolia", "address": "0xf4d953a3976f392aa5509612deff395983f22a84" },
+        { "name": "Base Learn: Errors", "chain": "base-sepolia", "address": "0xc1bd0d9a8863f2318001bc5024c7f5f58a2236f7" },
+        { "name": "Base Learn: Minimal Tokens", "chain": "base-sepolia", "address": "0x10ce928030e136ecc74d4a4416db9b533e3c694d" },
+        { "name": "Base Learn: Imports", "chain": "base-sepolia", "address": "0x8dd188ec36084d59948f90213afcd04429e33c0c" },
+        { "name": "Base Learn: Mappings", "chain": "base-sepolia", "address": "0xd32e3ace3272e2037003ca54ca7e5676f9b8d06c" },
+        { "name": "Base Learn: Storage", "chain": "base-sepolia", "address": "0x567452c6638c0d2d9778c20a3d59749fdcaa7ab3" },
+        { "name": "Base Learn: Inheritance", "chain": "base-sepolia", "address": "0xf90da05e77a33fe6d64bc2df84e7dd0069a2111c" },
+        { "name": "Base Learn: Structs", "chain": "base-sepolia", "address": "0x9eb1fa4cd9bd29ca2c8e72217a642811c1f6176d" },
+        { "name": "Base Learn: ERC-20 Tokens", "chain": "base-sepolia", "address": "0x4f333c49b820013e5e6fe86634dc4da88039ce50" },
+        { "name": "Base Learn: Deploying to a Testnet", "chain": "base-sepolia", "address": "0x075eb9dc52177aa3492e1d26f0fde3d729625d2f" },
+        { "name": "Base Learn: The \"new\" Keyword", "chain": "base-sepolia", "address": "0x4f21e69d0cde8c21cf82a6b37dda5444716afa46" }
+      ]
+    },
+    "buidl_guidl_speedrun_ethereum": {
+      "method": "public_api",
+      "api": "BuidlGuidl user-challenges endpoint by wallet address (see lib/buidl_guidl/client.rb in talent-api for base URL); count challenges with reviewAction == ACCEPTED"
+    },
+    "buidl_guidl_batches_graduate": {
+      "method": "distinct_contracts_owned",
+      "contracts": [
+        { "name": "BuidlGuidl Batch 8", "chain": "opt-mainnet", "address": "0x0969a73cb2ee0e637c050df7c96022e9c268fd89" },
+        { "name": "BuidlGuidl Batch 9", "chain": "opt-mainnet", "address": "0x12b6ec1eee38cadc477cdc2e82840f258e1ba5db" },
+        { "name": "BuidlGuidl Batch 10", "chain": "opt-mainnet", "address": "0x3dcc07603ba28e29e63faee903c76466926aa258" },
+        { "name": "BuidlGuidl Batch 11", "chain": "opt-mainnet", "address": "0x72a22ae8ddaba9d316ffed3d5c0a46f7ea8aa809" },
+        { "name": "BuidlGuidl Batch 12", "chain": "opt-mainnet", "address": "0xe293f2ffa82873eb50c89dfc78049828898b8aac" },
+        { "name": "BuidlGuidl Batch 13", "chain": "opt-mainnet", "address": "0xcc927dc261dec45c0dda2134a7dfb7bc882d5210" },
+        { "name": "BuidlGuidl Batch 14", "chain": "arb-mainnet", "address": "0xf06f5d7221e4de93641ea8e4b731b6e32cb57668" },
+        { "name": "BuidlGuidl Batch 15", "chain": "arb-mainnet", "address": "0x2f72968043075b538a975751a8dcd4064f704b52" },
+        { "name": "BuidlGuidl Batch 16", "chain": "arb-mainnet", "address": "0xce833b041e3db95fed6e1fac3fd1f54d2f61d9db" },
+        { "name": "BuidlGuidl Batch 17", "chain": "arb-mainnet", "address": "0xcce1408e40c388e6e9c99491fc2390b470417d40" },
+        { "name": "BuidlGuidl Batch 20", "chain": "arb-mainnet", "address": "0x321d32875d46774bbd9b55483b7f96d99e470b6e" },
+        { "name": "BuidlGuidl Batch 21", "chain": "arb-mainnet", "address": "0x59393a4f40033dbbe9f95808a47454d8da9447f9" }
+      ]
+    },
+    "farcaster_farcon_nyc_2025_attendee": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "Farcon NYC 2025 Attendee", "chain": "base-mainnet", "address": "0x0393152f881b127b64f3bb6110c337c7933565a7" }
+      ]
+    },
+    "crypto_nomads_club": {
+      "method": "nft_count",
+      "contracts": [
+        { "name": "Crypto Nomads", "chain": "eth-mainnet", "address": "0x951416cb5a9c5379ae696acb07cb8e25aefad370" }
+      ]
+    },
+    "developer_dao_member": {
+      "method": "erc20_balance_whole_tokens",
+      "contracts": [
+        { "name": "$CODE (Developer DAO)", "chain": "eth-mainnet", "address": "0xb24cd494faE4C180A89975F1328Eab2a7D5d8f11" }
+      ]
+    },
+    "talent_protocol_talent_holder": {
+      "method": "erc20_balance_whole_tokens",
+      "contracts": [
+        { "name": "$TALENT", "chain": "base-mainnet", "address": "0x9a33406165f562E16C3abD82fd1185482E01b49a" }
+      ]
+    },
+    "talent_vault": {
+      "method": "contract_call",
+      "call": { "function": "userBalanceMeta(address)", "result_index": 0, "divide_by": "1e18" },
+      "contracts": [
+        { "name": "TalentVault", "chain": "base-mainnet", "address": "0x23Ff3256A29847d7EF760943bd6679b565CbdE5a" }
+      ]
+    },
+    "talent_protocol_verified_builder": {
+      "method": "eas_attestations_by_recipient",
+      "schema_uid": "0x597905068aedcde4321ceaf2c42e24d3bbe0af694159bececd686bf057ec7ea5",
+      "networks": ["base-mainnet", "celo-mainnet"],
+      "value": "count of distinct attesters",
+      "notes": "enumerate via public EAS GraphQL (easscan) — recipient lookup is an indexer query, not a raw RPC read"
+    }
+  }
+}
