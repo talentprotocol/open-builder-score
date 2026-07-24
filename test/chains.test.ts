@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import specJson from '../spec/spec.json'
 import registryJson from '../spec/badge-registry.json'
 import type { Registry, Spec } from '@/lib/types'
-import { buildChainPlan, aggregateChainResults, type ChainPlan, type ReadOutcome } from '@/lib/chains'
+import { buildChainPlan, aggregateChainResults, mergeChainValues, type ChainPlan, type ReadOutcome } from '@/lib/chains'
+import type { CredentialInput } from '@/lib/types'
 
 const spec = specJson as Spec
 const registry = registryJson as unknown as Registry
@@ -98,6 +99,70 @@ describe('aggregateChainResults', () => {
     expect(aggregateChainResults(erc20Plan, outcomes)).toEqual({
       talent_protocol_talent_holder: { status: 'ok', accounts: [900] },
       talent_vault: { status: 'ok', accounts: [1.5] },
+    })
+  })
+})
+
+describe('mergeChainValues', () => {
+  it('sums account counts across chains when every chain read the slug ok', () => {
+    const chainA: Record<string, CredentialInput> = {
+      devfolio_hackathons_participation: { status: 'ok', accounts: [2] },
+    }
+    const chainB: Record<string, CredentialInput> = {
+      devfolio_hackathons_participation: { status: 'ok', accounts: [1] },
+    }
+    expect(mergeChainValues([chainA, chainB])).toEqual({
+      devfolio_hackathons_participation: { status: 'ok', accounts: [3] },
+    })
+  })
+
+  it('sums a slug spread across three chains', () => {
+    expect(
+      mergeChainValues([
+        { devfolio_hackathons_participation: { status: 'ok', accounts: [2] } },
+        { devfolio_hackathons_participation: { status: 'ok', accounts: [1] } },
+        { devfolio_hackathons_participation: { status: 'ok', accounts: [4] } },
+      ]),
+    ).toEqual({
+      devfolio_hackathons_participation: { status: 'ok', accounts: [7] },
+    })
+  })
+
+  it('marks the slug unavailable if any chain is unavailable, preserving the reason', () => {
+    const chainA: Record<string, CredentialInput> = {
+      buidl_guidl_batches_graduate: { status: 'ok', accounts: [1] },
+    }
+    const chainB: Record<string, CredentialInput> = {
+      buidl_guidl_batches_graduate: { status: 'unavailable', reason: 'Arbitrum One RPC unavailable' },
+    }
+    expect(mergeChainValues([chainA, chainB])).toEqual({
+      buidl_guidl_batches_graduate: { status: 'unavailable', reason: 'Arbitrum One RPC unavailable' },
+    })
+  })
+
+  it('keeps the first unavailable reason when multiple chains are unavailable', () => {
+    expect(
+      mergeChainValues([
+        { buidl_guidl_batches_graduate: { status: 'unavailable', reason: 'OP Mainnet RPC unavailable' } },
+        { buidl_guidl_batches_graduate: { status: 'unavailable', reason: 'Arbitrum One RPC unavailable' } },
+      ]),
+    ).toEqual({
+      buidl_guidl_batches_graduate: { status: 'unavailable', reason: 'OP Mainnet RPC unavailable' },
+    })
+  })
+
+  it('passes through slugs that appear on only one chain unchanged', () => {
+    const chainA: Record<string, CredentialInput> = {
+      eth_global_hacker: { status: 'ok', accounts: [2] },
+    }
+    const chainB: Record<string, CredentialInput> = {
+      talent_vault: { status: 'ok', accounts: [1.5] },
+      talent_protocol_talent_holder: { status: 'unavailable', reason: 'Base RPC unavailable' },
+    }
+    expect(mergeChainValues([chainA, chainB])).toEqual({
+      eth_global_hacker: { status: 'ok', accounts: [2] },
+      talent_vault: { status: 'ok', accounts: [1.5] },
+      talent_protocol_talent_holder: { status: 'unavailable', reason: 'Base RPC unavailable' },
     })
   })
 })

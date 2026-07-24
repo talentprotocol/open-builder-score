@@ -112,6 +112,33 @@ export function aggregateChainResults(
   return result
 }
 
+export function mergeChainValues(
+  perChain: Record<string, CredentialInput>[],
+): Record<string, CredentialInput> {
+  // Credentials that span multiple chains (distinct contracts counted ACROSS
+  // chains) appear once per chain map. Fold them so counts add up and a
+  // partial read never masquerades as complete.
+  const merged: Record<string, CredentialInput> = {}
+  for (const chainValues of perChain) {
+    for (const [slug, value] of Object.entries(chainValues)) {
+      const existing = merged[slug]
+      if (!existing) {
+        merged[slug] = value
+        continue
+      }
+      // First unavailable wins — attestation gating depends on this.
+      if (existing.status === 'unavailable') continue
+      if (value.status === 'unavailable') {
+        merged[slug] = value
+        continue
+      }
+      // Both ok → sum each chain's single-wallet count.
+      merged[slug] = { status: 'ok', accounts: [existing.accounts[0] + value.accounts[0]] }
+    }
+  }
+  return merged
+}
+
 function clientFor(chainId: number): PublicClient {
   const config = CHAIN_CONFIG[chainId]
   return createPublicClient({
@@ -125,16 +152,20 @@ export async function readChainCredentials(
   pocRpcSlugs: Set<string>,
 ): Promise<ChainReadResult> {
   const plans = buildChainPlan(registry, pocRpcSlugs)
-  const values: Record<string, CredentialInput> = {}
   let baseBlockNumber: bigint | null = null
 
-  await Promise.all(
-    plans.map(async (plan) => {
+  const perChain = await Promise.all(
+    plans.map(async (plan): Promise<Record<string, CredentialInput>> => {
       const chainName = CHAIN_CONFIG[plan.chainId].chain.name
       try {
         const client = clientFor(plan.chainId)
+        // Only Base's block number is used as the as-of anchor. Fetch it
+        // alongside Base's multicall (a block-number failure must mark Base
+        // unavailable), but never gate other chains on a block-number hiccup.
+        const blockNumberPromise =
+          plan.chainId === 8453 ? client.getBlockNumber() : Promise.resolve(null)
         const [blockNumber, outcomes] = await Promise.all([
-          client.getBlockNumber(),
+          blockNumberPromise,
           client.multicall({
             contracts: plan.reads.map((read) => ({
               address: read.address,
@@ -146,23 +177,22 @@ export async function readChainCredentials(
           }),
         ])
         if (plan.chainId === 8453) baseBlockNumber = blockNumber
-        Object.assign(
-          values,
-          aggregateChainResults(
-            plan,
-            outcomes.map((o) => ({
-              success: o.status === 'success',
-              value: o.status === 'success' ? (o.result as bigint | readonly bigint[]) : null,
-            })),
-          ),
+        return aggregateChainResults(
+          plan,
+          outcomes.map((o) => ({
+            success: o.status === 'success',
+            value: o.status === 'success' ? (o.result as bigint | readonly bigint[]) : null,
+          })),
         )
       } catch {
+        const unavailable: Record<string, CredentialInput> = {}
         for (const slug of new Set(plan.reads.map((r) => r.slug))) {
-          values[slug] = { status: 'unavailable', reason: `${chainName} RPC unavailable` }
+          unavailable[slug] = { status: 'unavailable', reason: `${chainName} RPC unavailable` }
         }
+        return unavailable
       }
     }),
   )
 
-  return { values, baseBlockNumber }
+  return { values: mergeChainValues(perChain), baseBlockNumber }
 }
