@@ -48,9 +48,10 @@ npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --
 ```
 
 `create-next-app` refuses to run in a directory containing `README.md` or
-`spec/` (they're not on its allowed-files list). Scaffold procedure: temporarily
-move `README.md` and `spec/` out of the repo root, run the generator, move them
-back — our README overwrites the generated one.
+`spec/` (they're not on its allowed-files list). Scaffold procedure: generate
+into a temporary subfolder, delete the generated README (ours wins), move
+everything else up to the repo root, remove the emptied subfolder, and fix the
+`name` in package.json.
 
 ### Client/server posture
 

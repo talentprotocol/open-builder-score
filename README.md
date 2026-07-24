@@ -22,11 +22,18 @@ widget, percentile context.
 
 ## Stack
 
-- Vite + TypeScript (+ React if wanted — engine must stay framework-free)
+- Next.js 16 (App Router, TypeScript, Tailwind v4) — standard runtime, but everything
+  meaningful is client-side (`"use client"`): no API routes, no server state. The
+  engine stays framework-free (`src/lib/engine.ts`).
 - [viem](https://viem.sh) for RPC, with Multicall3 batching
   (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on every chain)
+- RainbowKit + wagmi for wallet connection — needed only for the attest step; scoring
+  never requires a connected wallet. wagmi is pinned to 2.x (RainbowKit peer dep).
 - `@ethereum-attestation-service/eas-sdk` for attestation
-- Public RPC endpoints with a fallback list (no API keys anywhere in the repo)
+- Vitest for the engine's golden tests
+- Public RPC endpoints with a fallback list (no API keys anywhere in the repo; the
+  WalletConnect projectId is a public client identifier, not a secret)
+- Full rationale: `docs/superpowers/specs/2026-07-24-open-builder-score-stack-design.md`
 
 ## The math (mirrors production exactly)
 
@@ -111,7 +118,8 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       from the production scorer dump.
 - [x] **2. Badge registry** — `spec/badge-registry.json` ✅ generated from production
       `TrackedNFT` + the `app/services/data_points/*` contract maps.
-- [ ] **1b. Scaffold** — Vite app wired to load both spec files.
+- [x] **1b. Scaffold** — Next.js 16 app via `create-next-app` ✅ (spec files get
+      imported as JSON modules in phase 3).
 - [ ] **3. Engine** — `src/engine.ts`: pure `computeScore(inputs, spec) → {total, perCredential[]}`.
       No DOM, no fetch — takes already-fetched raw values. Vitest with a golden test vector.
 - [ ] **4. Chain reads** — `src/chains.ts`: group registry entries by chain, one Multicall3
@@ -125,7 +133,7 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       `string spec_version, address wallet, string github_handle, uint16 score, uint64 computed_at, uint64 block_number`
       EAS on Base is the OP-stack predeploy — verify addresses when registering
       (EAS `0x4200...0021`, SchemaRegistry `0x4200...0020`).
-- [ ] **8. Deploy** — Cloudflare Pages or GitHub Pages. No env vars, no secrets.
+- [ ] **8. Deploy** — Vercel. No env vars, no secrets.
 
 ## Remaining lookups (small)
 
