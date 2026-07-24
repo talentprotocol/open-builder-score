@@ -7,10 +7,11 @@ import { computeScore } from '@/lib/engine'
 import { gatherInputs, type GatherResult } from '@/lib/orchestrate'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { CredentialCard } from '@/components/credential-card'
+import { AttestPanel } from '@/components/attest-panel'
 
 const spec = specJson as Spec
 
-interface Scored {
+export interface Scored {
   score: ScoreResult
   gather: GatherResult
   address: `0x${string}`
@@ -106,6 +107,8 @@ export default function Home() {
               `, Base block ${scored.gather.baseBlockNumber}`}
             .
           </p>
+
+          <AttestPanel scored={scored} />
         </section>
       )}
     </main>
