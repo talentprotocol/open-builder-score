@@ -71,7 +71,6 @@ points = min(round(convert(value) * multiplier), max_score)
 | eth_global_finalist | 10 | 10.0 | none | max | 19 per-event finalist NFTs (Optimism) |
 | devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | distinct event SBTs (Base/Arb/Polygon) |
 | base_devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | 3 event SBTs (Base) |
-| base_basecamp | 20 | 20.0 | none | max | 2 attendee SBTs (Base) |
 | base_learn | 13 | 1.0 | none | max | 13 completion SBTs (**Base Sepolia**) |
 | buidl_guidl_batches_graduate | 20 | 20.0 | none | max | 12 batch SBTs (OP + Arb) |
 | farcaster_farcon_nyc_2025_attendee | 12 | 12.0 | none | max | ticket NFT (Base) |
@@ -96,6 +95,11 @@ The "won" variants use the *same contracts* as participation but filter token me
 | base_devfolio_hackathons_won | 30 | 15.0 | sqrt | max |
 | encode_programmes_participations | 20 | 10.0 | sqrt | max |
 | encode_programmes_won | 30 | 15.0 | sqrt | max |
+| base_basecamp | 20 | 20.0 | none | max |
+
+`base_basecamp`'s two attendee SBTs are ERC-1155, and production reads them from its NFT
+indexer (`WalletNFT`/`TrackedNFT`), not RPC `balanceOf` (which reverts for 1155s) — it was
+mis-tiered as `rpc` in the original extraction; it needs token-id enumeration post-POC.
 
 Also skipped: `developer_dao_og` (historical balance at block 13612670).
 

@@ -21,7 +21,7 @@ describe('buildChainPlan', () => {
       10: 29,     // 4 ETHGlobal packs + 19 finalists + 6 BuidlGuidl batches
       137: 1,     // ETHernals
       42161: 13,  // 7 Devfolio + 6 BuidlGuidl batches
-      8453: 11,   // 3 Devfolio + 3 Base Devfolio + 2 Basecamp + Farcon + $TALENT + vault
+      8453: 9,    // 3 Devfolio + 3 Base Devfolio + Farcon + $TALENT + vault
       84532: 13,  // 13 Base Learn SBTs
     })
   })

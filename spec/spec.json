@@ -1,6 +1,6 @@
 {
   "name": "Open Builder Score",
-  "version": "0.1.0-poc",
+  "version": "0.1.1-poc",
   "description": "Open, deterministic builder reputation score computable client-side from public data. Weights carried over from Talent Protocol's finalized 2025 season.",
   "constants": {
     "SECONDS_IN_A_YEAR": 31536000
@@ -38,7 +38,7 @@
     { "slug": "base_devfolio_hackathons_won", "name": "Base Hackathons Won", "tier": "indexed", "value": "distinct_contracts_with_winner_token", "max_score": 30, "multiplier": 15.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "WINNER metadata filter, as devfolio_hackathons_won" },
     { "slug": "encode_programmes_participations", "name": "Encode Programmes Participation", "tier": "indexed", "value": "distinct_qualifying_programmes", "max_score": 20, "multiplier": 10.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "single contract; programme_type + accreditation_level read from token metadata — needs enumeration" },
     { "slug": "encode_programmes_won", "name": "Encode Programmes Won", "tier": "indexed", "value": "distinct_winning_programmes", "max_score": 30, "multiplier": 15.0, "conversion": "sqrt", "calculation": "max_value", "poc": false, "notes": "metadata win-level filter" },
-    { "slug": "base_basecamp", "name": "Basecamp Attendee", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },
+    { "slug": "base_basecamp", "name": "Basecamp Attendee", "tier": "indexed", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": false, "notes": "SBTs are ERC-1155 and production reads them from its NFT indexer (WalletNFT/TrackedNFT), not RPC balanceOf — mis-tiered as rpc in the original extraction; needs token-id enumeration post-POC" },
     { "slug": "base_learn", "name": "Base Learn", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 13, "multiplier": 1.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true, "notes": "13 SBTs on Base Sepolia (testnet!)" },
     { "slug": "buidl_guidl_speedrun_ethereum", "name": "Speed Run Ethereum Challenges", "tier": "public_api", "value": "accepted_challenge_count", "max_score": 12, "multiplier": 1.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true, "notes": "NOT onchain — BuidlGuidl public API by wallet address; verify CORS, else defer" },
     { "slug": "buidl_guidl_batches_graduate", "name": "BuidlGuidl Batches Graduate", "tier": "rpc", "value": "distinct_contracts_owned", "max_score": 20, "multiplier": 20.0, "conversion": "no_conversion", "calculation": "max_value", "poc": true },

@@ -30,6 +30,30 @@ describe('countDistinctAttesters', () => {
     ).toBe(1)
   })
 
+  it('excludes revoked attestations with a string-serialized revocationTime', () => {
+    expect(
+      countDistinctAttesters([
+        response([
+          { attester: '0xAAA0000000000000000000000000000000000001', revocationTime: '1700000000' },
+          { attester: '0xAAA0000000000000000000000000000000000002', revocationTime: 0 },
+        ]),
+      ]),
+    ).toBe(1)
+  })
+
+  it('dedupes the same attester across networks despite different casing', () => {
+    expect(
+      countDistinctAttesters([
+        response([
+          { attester: '0xAAA000000000000000000000000000000000000A', revocationTime: 0 },
+        ]),
+        response([
+          { attester: '0xaaa000000000000000000000000000000000000a', revocationTime: 0 },
+        ]),
+      ]),
+    ).toBe(1)
+  })
+
   it('returns null on a malformed response', () => {
     expect(countDistinctAttesters([{ errors: [{ message: 'boom' }] }])).toBeNull()
     expect(countDistinctAttesters([response('not-an-array')])).toBeNull()

@@ -34,7 +34,8 @@ export function countDistinctAttesters(responses: unknown[]): number | null {
     const attestations = (raw as { data?: { attestations?: unknown } }).data?.attestations
     if (!Array.isArray(attestations)) return null
     for (const a of attestations as Attestation[]) {
-      const revoked = typeof a.revocationTime === 'number' && a.revocationTime !== 0
+      const rt = Number(a.revocationTime ?? 0)
+      const revoked = Number.isFinite(rt) && rt !== 0
       if (!revoked && typeof a.attester === 'string') attesters.add(a.attester.toLowerCase())
     }
   }

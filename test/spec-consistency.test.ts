@@ -9,8 +9,8 @@ const registry = registryJson as unknown as Registry
 const pocSlugs = spec.credentials.filter((c) => c.poc).map((c) => c.slug)
 
 describe('spec.json', () => {
-  it('has 22 POC credentials', () => {
-    expect(pocSlugs).toHaveLength(22)
+  it('has 21 POC credentials', () => {
+    expect(pocSlugs).toHaveLength(21)
   })
 
   it('uses only known conversions and calculations', () => {

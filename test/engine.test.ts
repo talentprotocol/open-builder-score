@@ -18,7 +18,6 @@ const goldenValues: Record<string, CredentialInput> = {
   eth_global_finalist: ok(1),                  // min(10, 10)           = 10
   devfolio_hackathons_participation: ok(9),    // sqrt(9)=3 ×10=30→20   = 20
   base_devfolio_hackathons_participation: ok(1), // sqrt(1)×10          = 10
-  base_basecamp: ok(1),                        // 1×20                  = 20
   base_learn: ok(7),                           // 7×1                   = 7
   buidl_guidl_speedrun_ethereum: ok(4),        // 4×1                   = 4
   buidl_guidl_batches_graduate: ok(1),         // 1×20                  = 20
@@ -53,10 +52,10 @@ describe('convert', () => {
 describe('computeScore — golden vector', () => {
   const result = computeScore({ computedAt: NOW, values: goldenValues }, spec)
 
-  it('total is 174', () => expect(result.total).toBe(174))
-  it('maxTotal is 277', () => expect(result.maxTotal).toBe(277))
+  it('total is 154', () => expect(result.total).toBe(154))
+  it('maxTotal is 257', () => expect(result.maxTotal).toBe(257))
   it('is complete', () => expect(result.complete).toBe(true))
-  it('covers all 22 POC credentials', () => expect(result.perCredential).toHaveLength(22))
+  it('covers all 21 POC credentials', () => expect(result.perCredential).toHaveLength(21))
 
   const points = Object.fromEntries(result.perCredential.map((r) => [r.slug, r.points]))
   it.each([
@@ -115,7 +114,7 @@ describe('computeScore — unavailable propagation', () => {
   }
   const result = computeScore({ computedAt: NOW, values }, spec)
 
-  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(174))
+  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(154))
   it('marks the result incomplete', () => expect(result.complete).toBe(false))
   it('carries the reason', () => {
     const cnc = result.perCredential.find((r) => r.slug === 'crypto_nomads_club')!
