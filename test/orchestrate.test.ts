@@ -34,4 +34,21 @@ describe('gatherInputs', () => {
     expect(inputs.computedAt).toBeGreaterThanOrEqual(before)
     expect(inputs.computedAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000))
   })
+
+  it('reports each source as it settles', async () => {
+    const settled: string[] = []
+    const ok = { status: 'ok' as const, accounts: [0] }
+    await gatherInputs(
+      '0x0000000000000000000000000000000000000001',
+      null,
+      {
+        chains: async () => ({ values: {}, baseBlockNumber: null }),
+        github: async () => ({}),
+        speedrun: async () => ok,
+        verifiedBuilder: async () => ok,
+      },
+      (source) => settled.push(source),
+    )
+    expect([...settled].sort()).toEqual(['chains', 'github', 'speedrun', 'verifiedBuilder'])
+  })
 })

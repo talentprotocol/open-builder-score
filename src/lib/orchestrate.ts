@@ -34,10 +34,13 @@ const defaultFetchers: Fetchers = {
   verifiedBuilder: readVerifiedBuilder,
 }
 
+export type GatherSource = 'chains' | 'github' | 'speedrun' | 'verifiedBuilder'
+
 export async function gatherInputs(
   address: `0x${string}`,
   githubHandle: string | null,
   fetchers: Partial<Fetchers> = {},
+  onSourceSettled?: (source: GatherSource) => void,
 ): Promise<GatherResult> {
   const f = { ...defaultFetchers, ...fetchers }
   const computedAt = Math.floor(Date.now() / 1000)
@@ -45,11 +48,14 @@ export async function gatherInputs(
     spec.credentials.filter((c) => c.poc && c.tier === 'rpc').map((c) => c.slug),
   )
 
+  const settle = <T,>(source: GatherSource, promise: Promise<T>): Promise<T> =>
+    promise.finally(() => onSourceSettled?.(source))
+
   const [chainResult, github, speedrun, verifiedBuilder] = await Promise.all([
-    f.chains(address, pocRpcSlugs),
-    f.github(githubHandle),
-    f.speedrun(address),
-    f.verifiedBuilder(address),
+    settle('chains', f.chains(address, pocRpcSlugs)),
+    settle('github', f.github(githubHandle)),
+    settle('speedrun', f.speedrun(address)),
+    settle('verifiedBuilder', f.verifiedBuilder(address)),
   ])
 
   return {
