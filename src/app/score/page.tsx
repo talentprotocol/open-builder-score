@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { scorePath } from '@/lib/routes'
+import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 
 function ScoreForm() {
   const router = useRouter()
@@ -14,6 +15,7 @@ function ScoreForm() {
   const [addressInput, setAddressInput] = useState(() => searchParams.get('wallet') ?? '')
   const [githubInput, setGithubInput] = useState(() => searchParams.get('github') ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [resolving, setResolving] = useState(false)
   // Prefill from the connected wallet only while the user hasn't typed in the
   // field. A prefill from query params counts as touched.
   const touched = useRef(addressInput !== '')
@@ -24,22 +26,36 @@ function ScoreForm() {
     }
   }, [connected, addressInput])
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    const address = addressInput.trim()
-    if (!isAddress(address)) {
-      setError('That doesn’t look like an EVM address (0x…, 40 hex chars).')
+    const input = addressInput.trim()
+    if (isAddress(input)) {
+      setError(null)
+      router.push(scorePath(input, githubInput))
       return
     }
-    setError(null)
-    router.push(scorePath(address, githubInput))
+    if (looksLikeEnsName(input)) {
+      setError(null)
+      setResolving(true)
+      const resolution = await resolveEnsName(input)
+      setResolving(false)
+      if (resolution.status === 'resolved') {
+        router.push(scorePath(resolution.address, githubInput))
+      } else if (resolution.status === 'unresolved') {
+        setError(`“${input}” doesn’t resolve to an address.`)
+      } else {
+        setError(resolution.reason)
+      }
+      return
+    }
+    setError('Enter an EVM address (0x…, 40 hex chars) or an ENS name.')
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="wallet" className="text-xs font-medium text-zinc-400">
-          Wallet address
+          Wallet address or ENS name
         </label>
         <input
           id="wallet"
@@ -48,7 +64,7 @@ function ScoreForm() {
             touched.current = true
             setAddressInput(e.target.value)
           }}
-          placeholder="0x…"
+          placeholder="0x… or name.eth"
           className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
           spellCheck={false}
         />
@@ -68,9 +84,10 @@ function ScoreForm() {
       </div>
       <button
         type="submit"
-        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium"
+        disabled={resolving}
+        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
       >
-        Compute score
+        {resolving ? 'Resolving name…' : 'Compute score'}
       </button>
       {error && <p className="text-sm text-red-400">{error}</p>}
     </form>
@@ -83,7 +100,7 @@ export default function ScorePage() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Check a Builder Score</h1>
         <p className="text-sm text-zinc-400">
-          Enter any wallet. Scoring runs entirely in your browser — connecting a wallet is only
+          Enter any wallet or ENS name. Scoring runs entirely in your browser — connecting a wallet is only
           needed to attest.
         </p>
       </header>

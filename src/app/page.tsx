@@ -27,7 +27,7 @@ const VALUE_PROPS = [
 ]
 
 const STEPS = [
-  'Enter any wallet address — and optionally a GitHub handle.',
+  'Enter any wallet address or ENS name — and optionally a GitHub handle.',
   'Your browser queries public data across 6 chains and GitHub.',
   'Every point comes with the exact formula that produced it.',
   'Optionally attest the score on Base — verifiable by anyone.',
