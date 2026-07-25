@@ -12,6 +12,7 @@ import type { Spec } from '@/lib/types'
 import { inputPath, scorePath } from '@/lib/routes'
 import { CredentialCard } from '@/components/credential-card'
 import { AttestPanel } from '@/components/attest-panel'
+import { AttestationHistory } from '@/components/attestation-history'
 import { CopyLinkButton } from '@/components/copy-link-button'
 
 const spec = specJson as Spec
@@ -194,6 +195,8 @@ export default function ResultsPage({
           </p>
 
           <AttestPanel scored={state.scored} />
+
+          <AttestationHistory wallet={state.scored.address} />
         </section>
       )}
     </main>
