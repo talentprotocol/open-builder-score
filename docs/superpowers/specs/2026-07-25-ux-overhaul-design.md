@@ -104,8 +104,12 @@ shape defined in exactly one place.
   `src/components/header.tsx`, `src/components/footer.tsx`,
   `src/components/landing-cta.tsx`, `src/lib/routes.ts`,
   `test/routes.test.ts`.
-- Unchanged: everything in `src/lib/` except the new `routes.ts`;
-  `credential-card.tsx`; `attest-panel.tsx`; all existing tests.
+- Unchanged: everything in `src/lib/` except the new `routes.ts` and moving
+  the `Scored` interface from `page.tsx` into `orchestrate.ts` (it can no
+  longer live in `page.tsx` once that file becomes the landing);
+  `credential-card.tsx`; all existing tests. `attest-panel.tsx` changes only
+  its `Scored` import path (`@/app/page` → `@/lib/orchestrate`) — no
+  behavior change.
 
 ## Visual direction
 
