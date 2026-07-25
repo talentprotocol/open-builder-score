@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { attestScore, ATTEST_CHAIN_ID } from '@/lib/eas'
+import { verifyPath } from '@/lib/routes'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
 import type { Scored } from '@/lib/orchestrate'
@@ -99,14 +101,22 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       </div>
       {error && <p className="text-xs text-red-400 break-all">{error}</p>}
       {attestationUid && (
-        <a
-          href={`${EXPLORER_BASE}${attestationUid}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-emerald-400 underline break-all"
-        >
-          Attested — view {attestationUid} on easscan
-        </a>
+        <div className="flex flex-col gap-1">
+          <a
+            href={`${EXPLORER_BASE}${attestationUid}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-emerald-400 underline break-all"
+          >
+            Attested — view {attestationUid} on easscan
+          </a>
+          <Link
+            href={verifyPath(attestationUid)}
+            className="text-xs text-emerald-400 underline"
+          >
+            Verify it here
+          </Link>
+        </div>
       )}
     </div>
   )

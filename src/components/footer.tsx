@@ -1,5 +1,7 @@
+import Link from 'next/link'
 import specJson from '../../spec/spec.json'
 import { ATTEST_CHAIN_ID, ATTEST_SCHEMA_UID } from '@/lib/eas'
+import { verifyPath } from '@/lib/routes'
 import type { Spec } from '@/lib/types'
 
 const spec = specJson as Spec
@@ -16,6 +18,10 @@ export function Footer() {
         <p>Computed entirely in your browser from public data. No backend.</p>
         <p>
           spec v{spec.version} ·{' '}
+          <Link href={verifyPath()} className="underline">
+            Verify
+          </Link>{' '}
+          ·{' '}
           <a href={SCHEMA_URL} target="_blank" rel="noreferrer" className="underline">
             EAS schema
           </a>
