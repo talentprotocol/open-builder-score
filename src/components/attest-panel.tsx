@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
-import { attestScore, ATTEST_CHAIN_ID } from '@/lib/eas'
+import { attestScore, ATTEST_CHAIN_ID, EASSCAN_SITE } from '@/lib/eas'
 import { verifyPath } from '@/lib/routes'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
@@ -12,10 +12,7 @@ import type { Scored } from '@/lib/orchestrate'
 
 const spec = specJson as Spec
 
-const EXPLORER_BASE =
-  ATTEST_CHAIN_ID === 84532
-    ? 'https://base-sepolia.easscan.org/attestation/view/'
-    : 'https://base.easscan.org/attestation/view/'
+const EXPLORER_BASE = `${EASSCAN_SITE}/attestation/view/`
 
 export function AttestPanel({ scored }: { scored: Scored }) {
   const { address: connected, chainId } = useAccount()

@@ -1,16 +1,14 @@
-import { decodeAbiParameters, getAddress } from 'viem'
+import { decodeAbiParameters, getAddress, parseAbiParameters } from 'viem'
 import specJson from '../../spec/spec.json'
-import { ATTEST_CHAIN_ID, ATTEST_SCHEMA_UID } from './eas'
+import { ATTEST_SCHEMA, ATTEST_SCHEMA_UID, EASSCAN_SITE } from './eas'
 import type { ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
 
-export const EASSCAN_SITE =
-  ATTEST_CHAIN_ID === 84532
-    ? 'https://base-sepolia.easscan.org'
-    : 'https://base.easscan.org'
-
 export const EASSCAN_GRAPHQL = `${EASSCAN_SITE}/graphql`
+
+// Derived from the canonical schema string so the decoder can never drift from eas.ts.
+const SCHEMA_PARAMS = parseAbiParameters(ATTEST_SCHEMA)
 
 export const ATTESTATION_QUERY = `query($id: String!) {
   attestation(where: { id: $id }) {
@@ -57,6 +55,13 @@ export function isAttestationUid(value: string): boolean {
 export function parseAttestationResponse(raw: unknown): FetchAttestationResult {
   const unexpected = { status: 'error', reason: 'easscan returned an unexpected shape' } as const
   if (typeof raw !== 'object' || raw === null) return unexpected
+  const errors = (raw as { errors?: unknown }).errors
+  if (Array.isArray(errors) && errors.length > 0) {
+    const message = (errors[0] as { message?: unknown })?.message
+    const reason =
+      typeof message === 'string' ? `easscan: ${message}` : 'easscan returned an error'
+    return { status: 'error', reason }
+  }
   const att = (raw as { data?: { attestation?: unknown } }).data?.attestation
   if (att === null) return { status: 'not_found' }
   if (typeof att !== 'object' || att === undefined) return unexpected
@@ -107,17 +112,7 @@ export async function fetchAttestation(
 export function decodeAttestationData(data: `0x${string}`): DecodedScoreAttestation | null {
   try {
     const [specVersion, wallet, githubHandle, score, computedAt, blockNumber] =
-      decodeAbiParameters(
-        [
-          { type: 'string' },
-          { type: 'address' },
-          { type: 'string' },
-          { type: 'uint16' },
-          { type: 'uint64' },
-          { type: 'uint64' },
-        ],
-        data,
-      )
+      decodeAbiParameters(SCHEMA_PARAMS, data)
     return {
       specVersion,
       wallet,
@@ -140,9 +135,6 @@ export function validateAttestation(
   if (att.schemaId.toLowerCase() !== ATTEST_SCHEMA_UID.toLowerCase()) {
     problems.push('attestation uses a different schema — not a Builder Score attestation')
   }
-  if (att.revocationTime !== 0) {
-    problems.push('attestation has been revoked')
-  }
   if (decoded === null) {
     problems.push('attestation data does not decode as a Builder Score')
     return problems
@@ -154,12 +146,25 @@ export function validateAttestation(
   } catch {
     problems.push('recipient is not a valid address')
   }
-  if (decoded.specVersion !== spec.version) {
-    problems.push(
-      `attested with spec v${decoded.specVersion}; this app recomputes spec v${spec.version}, so an exact comparison isn't possible`,
-    )
-  }
   return problems
+}
+
+export type AttestationClassification =
+  | { kind: 'malformed'; problems: string[] }
+  | { kind: 'revoked'; decoded: DecodedScoreAttestation }
+  | { kind: 'spec_mismatch'; decoded: DecodedScoreAttestation }
+  | { kind: 'ok'; decoded: DecodedScoreAttestation }
+
+// Precedence: integrity problems > revoked > spec mismatch > ok.
+export function classifyAttestation(
+  att: OnchainAttestation,
+  decoded: DecodedScoreAttestation | null,
+): AttestationClassification {
+  const problems = validateAttestation(att, decoded)
+  if (problems.length > 0 || decoded === null) return { kind: 'malformed', problems }
+  if (att.revocationTime !== 0) return { kind: 'revoked', decoded }
+  if (decoded.specVersion !== spec.version) return { kind: 'spec_mismatch', decoded }
+  return { kind: 'ok', decoded }
 }
 
 export function scoreVerdict(attestedScore: number, recomputed: ScoreResult): VerifyVerdict {

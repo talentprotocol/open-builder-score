@@ -14,6 +14,11 @@ export const ATTEST_SCHEMA =
 
 export const ATTEST_CHAIN_ID: number = 84532 // Base Sepolia first; switch to 8453 (Base) post-registration
 
+export const EASSCAN_SITE =
+  ATTEST_CHAIN_ID === 84532
+    ? 'https://base-sepolia.easscan.org'
+    : 'https://base.easscan.org'
+
 export function computeSchemaUid(
   schema: string,
   resolver: `0x${string}`,

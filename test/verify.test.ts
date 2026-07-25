@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { encodeAbiParameters, zeroAddress } from 'viem'
 import {
   ATTESTATION_QUERY,
+  classifyAttestation,
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
@@ -107,11 +108,6 @@ describe('validateAttestation', () => {
     const problems = validateAttestation(att, decodeAttestationData(att.data))
     expect(problems.some((p) => p.includes('different schema'))).toBe(true)
   })
-  it('flags a revoked attestation', () => {
-    const att = attestation({ revocationTime: 1784976000 })
-    const problems = validateAttestation(att, decodeAttestationData(att.data))
-    expect(problems.some((p) => p.includes('revoked'))).toBe(true)
-  })
   it('flags undecodable data', () => {
     const att = attestation({ data: '0x1234' })
     expect(validateAttestation(att, null).some((p) => p.includes('decode'))).toBe(true)
@@ -121,10 +117,24 @@ describe('validateAttestation', () => {
     const problems = validateAttestation(att, decodeAttestationData(att.data))
     expect(problems.some((p) => p.includes('recipient'))).toBe(true)
   })
-  it('flags a spec version mismatch', () => {
+})
+
+describe('classifyAttestation', () => {
+  it('classifies a clean attestation as ok', () => {
+    const att = attestation()
+    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('ok')
+  })
+  it('classifies a revoked-only attestation as revoked', () => {
+    const att = attestation({ revocationTime: 1784976000 })
+    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('revoked')
+  })
+  it('classifies a spec-version override as spec_mismatch', () => {
     const att = attestation({ data: encodeData({ specVersion: '9.9.9' }) })
-    const problems = validateAttestation(att, decodeAttestationData(att.data))
-    expect(problems.some((p) => p.includes('spec'))).toBe(true)
+    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('spec_mismatch')
+  })
+  it('classifies a foreign schema as malformed even when also revoked (precedence)', () => {
+    const att = attestation({ schemaId: `0x${'00'.repeat(32)}`, revocationTime: 1784976000 })
+    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('malformed')
   })
 })
 
@@ -148,6 +158,11 @@ describe('parseAttestationResponse', () => {
   })
   it('maps null attestation to not_found', () => {
     expect(parseAttestationResponse({ data: { attestation: null } }).status).toBe('not_found')
+  })
+  it('surfaces GraphQL-level errors', () => {
+    const result = parseAttestationResponse({ errors: [{ message: 'boom' }], data: null })
+    expect(result.status).toBe('error')
+    expect(result.status === 'error' && result.reason).toContain('boom')
   })
   it('maps junk shapes to error', () => {
     expect(parseAttestationResponse(null).status).toBe('error')

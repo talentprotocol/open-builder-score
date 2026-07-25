@@ -1,15 +1,12 @@
 import Link from 'next/link'
 import specJson from '../../spec/spec.json'
-import { ATTEST_CHAIN_ID, ATTEST_SCHEMA_UID } from '@/lib/eas'
+import { ATTEST_SCHEMA_UID, EASSCAN_SITE } from '@/lib/eas'
 import { verifyPath } from '@/lib/routes'
 import type { Spec } from '@/lib/types'
 
 const spec = specJson as Spec
 
-const SCHEMA_URL =
-  ATTEST_CHAIN_ID === 84532
-    ? `https://base-sepolia.easscan.org/schema/view/${ATTEST_SCHEMA_UID}`
-    : `https://base.easscan.org/schema/view/${ATTEST_SCHEMA_UID}`
+const SCHEMA_URL = `${EASSCAN_SITE}/schema/view/${ATTEST_SCHEMA_UID}`
 
 export function Footer() {
   return (
