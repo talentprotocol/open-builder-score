@@ -46,6 +46,9 @@ const CHAIN_CONFIG: Record<number, { chain: Chain; rpcUrls: string[] }> = {
   84532: { chain: baseSepolia, rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com', 'https://base-sepolia.drpc.org'] },
 }
 
+// Reused by src/lib/ens.ts for mainnet ENS resolution.
+export const MAINNET_RPC_URLS = CHAIN_CONFIG[1].rpcUrls
+
 export function buildChainPlan(reg: Registry, pocRpcSlugs: Set<string>): ChainPlan[] {
   const byChain = new Map<number, PlannedRead[]>()
   for (const [slug, entry] of Object.entries(reg.credentials)) {
