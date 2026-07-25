@@ -6,7 +6,7 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { attestScore, ATTEST_CHAIN_ID } from '@/lib/eas'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
-import type { Scored } from '@/app/page'
+import type { Scored } from '@/lib/orchestrate'
 
 const spec = specJson as Spec
 

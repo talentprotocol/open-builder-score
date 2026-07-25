@@ -4,19 +4,12 @@ import { useState } from 'react'
 import { isAddress } from 'viem'
 import specJson from '../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
-import { gatherInputs, type GatherResult } from '@/lib/orchestrate'
-import type { ScoreResult, Spec } from '@/lib/types'
+import { gatherInputs, type Scored } from '@/lib/orchestrate'
+import type { Spec } from '@/lib/types'
 import { CredentialCard } from '@/components/credential-card'
 import { AttestPanel } from '@/components/attest-panel'
 
 const spec = specJson as Spec
-
-export interface Scored {
-  score: ScoreResult
-  gather: GatherResult
-  address: `0x${string}`
-  githubHandle: string | null
-}
 
 export default function Home() {
   const [addressInput, setAddressInput] = useState('')

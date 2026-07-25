@@ -3,13 +3,21 @@ import { readChainCredentials, type ChainReadResult } from './chains'
 import { readGithubCredentials } from './github'
 import { readSpeedrunCredential } from './speedrun'
 import { readVerifiedBuilder } from './easscan'
-import type { CredentialInput, EngineInputs, Spec } from './types'
+import type { CredentialInput, EngineInputs, ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
 
 export interface GatherResult {
   inputs: EngineInputs
   baseBlockNumber: bigint | null
+}
+
+// A fully computed score bundle as the UI screens pass it around.
+export interface Scored {
+  score: ScoreResult
+  gather: GatherResult
+  address: `0x${string}`
+  githubHandle: string | null
 }
 
 export interface Fetchers {
