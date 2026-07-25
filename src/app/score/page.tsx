@@ -36,24 +36,36 @@ function ScoreForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <input
-        value={addressInput}
-        onChange={(e) => {
-          touched.current = true
-          setAddressInput(e.target.value)
-        }}
-        placeholder="Wallet address (0x…)"
-        className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
-        spellCheck={false}
-      />
-      <input
-        value={githubInput}
-        onChange={(e) => setGithubInput(e.target.value)}
-        placeholder="GitHub handle (optional)"
-        className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
-        spellCheck={false}
-      />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="wallet" className="text-xs font-medium text-zinc-400">
+          Wallet address
+        </label>
+        <input
+          id="wallet"
+          value={addressInput}
+          onChange={(e) => {
+            touched.current = true
+            setAddressInput(e.target.value)
+          }}
+          placeholder="0x…"
+          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
+          spellCheck={false}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="github" className="text-xs font-medium text-zinc-400">
+          GitHub handle <span className="font-normal text-zinc-600">(optional)</span>
+        </label>
+        <input
+          id="github"
+          value={githubInput}
+          onChange={(e) => setGithubInput(e.target.value)}
+          placeholder="octocat"
+          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
+          spellCheck={false}
+        />
+      </div>
       <button
         type="submit"
         className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium"
