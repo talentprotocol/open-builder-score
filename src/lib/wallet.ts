@@ -3,4 +3,4 @@
 // zero-secrets ground rule. Injected wallets (MetaMask etc.) work even with
 // this placeholder; WalletConnect QR pairing needs the real id.
 // HUMAN ACTION: create a free project at https://cloud.reown.com and replace.
-export const WALLETCONNECT_PROJECT_ID = 'OPEN_BUILDER_SCORE_POC_PLACEHOLDER'
+export const WALLETCONNECT_PROJECT_ID = '6a978f82bc5ebbc3c9a9065c47c502a9'
