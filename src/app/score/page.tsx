@@ -6,6 +6,8 @@ import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { scorePath } from '@/lib/routes'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
+import { GithubSignIn } from '@/components/github-sign-in'
+import { useGithubAuth } from '@/components/use-github-auth'
 
 function ScoreForm() {
   const router = useRouter()
@@ -25,6 +27,17 @@ function ScoreForm() {
       setAddressInput(connected)
     }
   }, [connected, addressInput])
+
+  const auth = useGithubAuth()
+  // Prefill the handle from a verified session only while untouched — mirrors
+  // the connected-wallet prefill.
+  const githubTouched = useRef(githubInput !== '')
+
+  useEffect(() => {
+    if (!githubTouched.current && githubInput === '' && auth) {
+      setGithubInput(auth.login)
+    }
+  }, [auth, githubInput])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -76,12 +89,21 @@ function ScoreForm() {
         <input
           id="github"
           value={githubInput}
-          onChange={(e) => setGithubInput(e.target.value)}
+          onChange={(e) => {
+            githubTouched.current = true
+            setGithubInput(e.target.value)
+          }}
           placeholder="octocat"
           className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
           spellCheck={false}
         />
       </div>
+      <GithubSignIn
+        onVerified={(login) => {
+          githubTouched.current = true
+          setGithubInput(login)
+        }}
+      />
       <button
         type="submit"
         disabled={resolving}

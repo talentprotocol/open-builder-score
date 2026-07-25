@@ -8,6 +8,9 @@ import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
 import { gatherInputs, type GatherSource, type Scored } from '@/lib/orchestrate'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
+import { readGithubCredentials } from '@/lib/github'
+import { authorizedFetch } from '@/lib/github-auth'
+import { useGithubAuth } from '@/components/use-github-auth'
 import type { Spec } from '@/lib/types'
 import { inputPath, scorePath } from '@/lib/routes'
 import { CredentialCard } from '@/components/credential-card'
@@ -40,6 +43,7 @@ export default function ResultsPage({
   searchParams: Promise<{ github?: string }>
 }) {
   const router = useRouter()
+  const auth = useGithubAuth()
   const { wallet: rawWallet } = use(params)
   const { github } = use(searchParams)
   let wallet: string
@@ -99,7 +103,11 @@ export default function ResultsPage({
     setState({ phase: 'loading', settled: [] })
     ;(async () => {
       try {
-        const gather = await gatherInputs(address, githubHandle, {}, (source) => {
+        // Signed-in sessions authenticate GitHub reads (5,000 req/hr vs 60).
+        const fetchers = auth
+          ? { github: (handle: string | null) => readGithubCredentials(handle, authorizedFetch(auth.token)) }
+          : {}
+        const gather = await gatherInputs(address, githubHandle, fetchers, (source) => {
           if (cancelled) return
           setState((prev) =>
             prev.phase === 'loading'
@@ -121,7 +129,7 @@ export default function ResultsPage({
     return () => {
       cancelled = true
     }
-  }, [wallet, githubHandle, attempt, router])
+  }, [wallet, githubHandle, attempt, router, auth])
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
@@ -188,6 +196,10 @@ export default function ResultsPage({
           <p className="break-all font-mono text-xs text-zinc-500">
             {state.scored.address}
             {state.scored.githubHandle && ` · @${state.scored.githubHandle}`}
+            {state.scored.githubHandle &&
+              auth?.login.toLowerCase() === state.scored.githubHandle.toLowerCase() && (
+                <span className="text-emerald-400"> · verified</span>
+              )}
           </p>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
