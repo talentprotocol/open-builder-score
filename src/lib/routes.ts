@@ -16,3 +16,7 @@ export function inputPath(wallet: string | null = null, github: string | null = 
   const query = params.toString()
   return query ? `/score?${query}` : '/score'
 }
+
+export function verifyPath(uid: string | null = null): string {
+  return uid ? `/verify/${uid}` : '/verify'
+}

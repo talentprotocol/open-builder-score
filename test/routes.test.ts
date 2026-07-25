@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePath, inputPath } from '@/lib/routes'
+import { scorePath, inputPath, verifyPath } from '@/lib/routes'
 
 const WALLET = '0x33041027dd8F4dC82B6e825FB37ADf8f15d44053'
 
@@ -39,5 +39,17 @@ describe('inputPath', () => {
     expect(inputPath(WALLET, '')).toBe(`/score?wallet=${WALLET}`)
     expect(inputPath('', 'octocat')).toBe('/score?github=octocat')
     expect(inputPath('  ', null)).toBe('/score')
+  })
+})
+
+describe('verifyPath', () => {
+  it('is bare /verify with no uid', () => {
+    expect(verifyPath()).toBe('/verify')
+    expect(verifyPath(null)).toBe('/verify')
+  })
+
+  it('builds the deep link with a uid', () => {
+    const uid = `0x${'ab'.repeat(32)}`
+    expect(verifyPath(uid)).toBe(`/verify/${uid}`)
   })
 })
