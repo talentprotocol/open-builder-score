@@ -13,6 +13,14 @@ describe('schema UID', () => {
     expect(uid).toBe(ATTEST_SCHEMA_UID)
   })
 
+  it('matches the schema registered on Base Sepolia (schema #2265, 2026-07-25)', () => {
+    // Golden pin: verified on-chain against SchemaRegistry.getSchema — a change to
+    // ATTEST_SCHEMA or computeSchemaUid that breaks this line breaks attestation.
+    expect(ATTEST_SCHEMA_UID).toBe(
+      '0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd',
+    )
+  })
+
   it('changes when revocable changes', () => {
     const revocable = computeSchemaUid(ATTEST_SCHEMA, '0x0000000000000000000000000000000000000000', true)
     const irrevocable = computeSchemaUid(ATTEST_SCHEMA, '0x0000000000000000000000000000000000000000', false)
