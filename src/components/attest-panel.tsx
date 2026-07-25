@@ -6,6 +6,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { attestScore, ATTEST_CHAIN_ID, EASSCAN_SITE } from '@/lib/eas'
 import { verifyPath } from '@/lib/routes'
+import { useGithubAuth } from '@/components/use-github-auth'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
 import type { Scored } from '@/lib/orchestrate'
@@ -18,6 +19,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   const { address: connected, chainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { switchChainAsync } = useSwitchChain()
+  const auth = useGithubAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [attestationUid, setAttestationUid] = useState<string | null>(null)
@@ -27,6 +29,21 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       <p className="text-xs text-amber-500">
         Attestation is disabled while any source is unavailable — an attested score must be
         computed from complete data.
+      </p>
+    )
+  }
+
+  // Integrity gate: a handle-bearing attestation requires the signed-in
+  // GitHub user to be that handle. Handle-less attestations are unrestricted.
+  const handleVerified =
+    scored.githubHandle === null ||
+    (auth !== null && auth.login.toLowerCase() === scored.githubHandle.toLowerCase())
+  if (!handleVerified) {
+    return (
+      <p className="text-xs text-amber-500">
+        This score includes the GitHub handle @{scored.githubHandle}, which hasn&apos;t been
+        verified. Sign in with GitHub on the form screen (Edit inputs) to prove it&apos;s yours
+        before attesting.
       </p>
     )
   }

@@ -196,6 +196,10 @@ export default function ResultsPage({
           <p className="break-all font-mono text-xs text-zinc-500">
             {state.scored.address}
             {state.scored.githubHandle && ` · @${state.scored.githubHandle}`}
+            {state.scored.githubHandle &&
+              auth?.login.toLowerCase() === state.scored.githubHandle.toLowerCase() && (
+                <span className="text-emerald-400"> · verified</span>
+              )}
           </p>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
