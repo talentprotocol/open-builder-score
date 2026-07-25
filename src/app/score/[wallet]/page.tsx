@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { isAddress } from 'viem'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
-import { gatherInputs, type GatherSource, type Scored } from '@/lib/orchestrate'
+import { gatherMultiInputs, type GatherSource, type Scored } from '@/lib/orchestrate'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { readGithubCredentials } from '@/lib/github'
 import { authorizedFetch } from '@/lib/github-auth'
@@ -40,12 +40,12 @@ export default function ResultsPage({
   searchParams,
 }: {
   params: Promise<{ wallet: string }>
-  searchParams: Promise<{ github?: string }>
+  searchParams: Promise<{ github?: string; wallets?: string }>
 }) {
   const router = useRouter()
   const auth = useGithubAuth()
   const { wallet: rawWallet } = use(params)
-  const { github } = use(searchParams)
+  const { github, wallets } = use(searchParams)
   let wallet: string
   try {
     wallet = decodeURIComponent(rawWallet)
@@ -55,13 +55,21 @@ export default function ResultsPage({
     wallet = rawWallet
   }
   const githubHandle = github?.trim() || null
+  const extrasRaw = (wallets ?? '')
+    .split(',')
+    .map((w) => w.trim())
+    .filter((w) => w !== '')
+    .slice(0, 4)
+  const tokens = [wallet, ...extrasRaw]
+  const allAddresses = tokens.every((t) => isAddress(t))
+  const allValid = tokens.every((t) => isAddress(t) || looksLikeEnsName(t))
 
   // Lazy init picks the right phase synchronously, avoiding a one-frame
   // checklist flash on ENS/invalid URLs before the effect runs.
   const [state, setState] = useState<State>(() =>
-    isAddress(wallet)
+    allAddresses
       ? { phase: 'loading', settled: [] }
-      : looksLikeEnsName(wallet)
+      : allValid
         ? { phase: 'resolving' }
         : {
             phase: 'error',
@@ -73,20 +81,42 @@ export default function ResultsPage({
   useEffect(() => {
     let cancelled = false
 
-    if (!isAddress(wallet)) {
-      if (looksLikeEnsName(wallet)) {
-        // Shareable links like /score/vitalik.eth: resolve, then canonicalize.
+    if (!allAddresses) {
+      if (allValid) {
+        // Shareable links may hold ENS names anywhere in the wallet list:
+        // resolve them all, dedupe, then canonicalize the URL.
         setState({ phase: 'resolving' })
         ;(async () => {
-          const resolution = await resolveEnsName(wallet)
+          const resolved = await Promise.all(
+            tokens.map(async (token) => ({
+              token,
+              result: isAddress(token)
+                ? ({ status: 'resolved', address: token } as const)
+                : await resolveEnsName(token),
+            })),
+          )
           if (cancelled) return
-          if (resolution.status === 'resolved') {
-            router.replace(scorePath(resolution.address, githubHandle))
-          } else if (resolution.status === 'unresolved') {
-            setState({ phase: 'error', message: `“${wallet}” doesn’t resolve to an address.` })
-          } else {
-            setState({ phase: 'error', message: resolution.reason })
+          const failed = resolved.find(({ result }) => result.status !== 'resolved')
+          if (failed) {
+            setState({
+              phase: 'error',
+              message:
+                failed.result.status === 'unresolved'
+                  ? `“${failed.token}” doesn’t resolve to an address.`
+                  : (failed.result as { reason: string }).reason,
+            })
+            return
           }
+          const [primary, ...rest] = resolved.map(
+            ({ result }) => (result as { address: `0x${string}` }).address,
+          )
+          const seen = new Set([primary.toLowerCase()])
+          const deduped = rest.filter((a) => {
+            if (seen.has(a.toLowerCase())) return false
+            seen.add(a.toLowerCase())
+            return true
+          })
+          router.replace(scorePath(primary, githubHandle, deduped))
         })()
       } else {
         setState({
@@ -99,7 +129,13 @@ export default function ResultsPage({
       }
     }
 
-    const address = wallet // narrowed to `0x${string}` by isAddress above
+    const address = wallet as `0x${string}`
+    const seen = new Set([address.toLowerCase()])
+    const extraAddresses = (extrasRaw as `0x${string}`[]).filter((a) => {
+      if (seen.has(a.toLowerCase())) return false
+      seen.add(a.toLowerCase())
+      return true
+    })
     setState({ phase: 'loading', settled: [] })
     ;(async () => {
       try {
@@ -107,18 +143,29 @@ export default function ResultsPage({
         const fetchers = auth
           ? { github: (handle: string | null) => readGithubCredentials(handle, authorizedFetch(auth.token)) }
           : {}
-        const gather = await gatherInputs(address, githubHandle, fetchers, (source) => {
-          if (cancelled) return
-          setState((prev) =>
-            prev.phase === 'loading'
-              ? { phase: 'loading', settled: [...prev.settled, source] }
-              : prev,
-          )
-        })
+        const gather = await gatherMultiInputs(
+          [address, ...extraAddresses],
+          githubHandle,
+          fetchers,
+          (source) => {
+            if (cancelled) return
+            setState((prev) =>
+              prev.phase === 'loading'
+                ? { phase: 'loading', settled: [...prev.settled, source] }
+                : prev,
+            )
+          },
+        )
         if (cancelled) return
         setState({
           phase: 'done',
-          scored: { score: computeScore(gather.inputs, spec), gather, address, githubHandle },
+          scored: {
+            score: computeScore(gather.inputs, spec),
+            gather,
+            address,
+            githubHandle,
+            extraAddresses,
+          },
         })
       } catch {
         if (!cancelled) {
@@ -129,7 +176,8 @@ export default function ResultsPage({
     return () => {
       cancelled = true
     }
-  }, [wallet, githubHandle, attempt, router, auth])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, wallets, githubHandle, attempt, router, auth])
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
@@ -143,7 +191,10 @@ export default function ResultsPage({
             const done = state.settled.includes(source)
             return (
               <li key={source} className={done ? 'text-emerald-400' : 'text-zinc-500'}>
-                {done ? '✓' : '○'} {SOURCE_LABELS[source]}
+                {done ? '✓' : '○'}{' '}
+                {source === 'chains' && extrasRaw.length > 0
+                  ? `Onchain badges & balances (6 chains, ${extrasRaw.length + 1} wallets)`
+                  : SOURCE_LABELS[source]}
               </li>
             )
           })}
@@ -185,7 +236,7 @@ export default function ResultsPage({
             <div className="flex shrink-0 items-center gap-3">
               <CopyLinkButton />
               <Link
-                href={inputPath(state.scored.address, state.scored.githubHandle)}
+                href={inputPath(state.scored.address, state.scored.githubHandle, state.scored.extraAddresses)}
                 className="text-sm text-zinc-400 underline"
               >
                 Edit inputs
@@ -193,14 +244,21 @@ export default function ResultsPage({
             </div>
           </div>
 
-          <p className="break-all font-mono text-xs text-zinc-500">
-            {state.scored.address}
-            {state.scored.githubHandle && ` · @${state.scored.githubHandle}`}
-            {state.scored.githubHandle &&
-              auth?.login.toLowerCase() === state.scored.githubHandle.toLowerCase() && (
-                <span className="text-emerald-400"> · verified</span>
-              )}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="break-all font-mono text-xs text-zinc-500">
+              {state.scored.address}
+              {state.scored.githubHandle && ` · @${state.scored.githubHandle}`}
+              {state.scored.githubHandle &&
+                auth?.login.toLowerCase() === state.scored.githubHandle.toLowerCase() && (
+                  <span className="text-emerald-400"> · verified</span>
+                )}
+            </p>
+            {state.scored.extraAddresses.map((a) => (
+              <p key={a} className="break-all font-mono text-xs text-zinc-500">
+                + {a}
+              </p>
+            ))}
+          </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {state.scored.score.perCredential.map((result) => (

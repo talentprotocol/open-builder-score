@@ -53,3 +53,28 @@ describe('verifyPath', () => {
     expect(verifyPath(uid)).toBe(`/verify/${uid}`)
   })
 })
+
+describe('extra wallets', () => {
+  it('scorePath without extras is unchanged', () => {
+    expect(scorePath('0xabc', null)).toBe('/score/0xabc')
+    expect(scorePath('0xabc', 'octocat', [])).toBe('/score/0xabc?github=octocat')
+  })
+  it('scorePath appends comma-separated wallets', () => {
+    expect(scorePath('0xabc', null, ['0xdef', '0x123'])).toBe('/score/0xabc?wallets=0xdef,0x123')
+    expect(scorePath('0xabc', 'octocat', ['0xdef'])).toBe(
+      '/score/0xabc?github=octocat&wallets=0xdef',
+    )
+  })
+  it('scorePath drops blank extras', () => {
+    expect(scorePath('0xabc', null, [' ', ''])).toBe('/score/0xabc')
+  })
+  it('inputPath without extras is unchanged', () => {
+    expect(inputPath()).toBe('/score')
+    expect(inputPath('0xabc', 'octocat')).toBe('/score?wallet=0xabc&github=octocat')
+  })
+  it('inputPath carries extras', () => {
+    expect(inputPath('0xabc', null, ['0xdef', '0x123'])).toBe(
+      '/score?wallet=0xabc&wallets=0xdef%2C0x123',
+    )
+  })
+})

@@ -18,6 +18,7 @@ export interface Scored {
   gather: GatherResult
   address: `0x${string}`
   githubHandle: string | null
+  extraAddresses: `0x${string}`[]
 }
 
 export interface Fetchers {
@@ -36,12 +37,22 @@ const defaultFetchers: Fetchers = {
 
 export type GatherSource = 'chains' | 'github' | 'speedrun' | 'verifiedBuilder'
 
-export async function gatherInputs(
-  address: `0x${string}`,
+// Two per-wallet results for the same credential become one: accounts
+// concatenate in wallet order; if either wallet couldn't be checked the
+// merged credential stays unavailable ("couldn't check" ≠ "not earned").
+export function mergeCredentialInputs(a: CredentialInput, b: CredentialInput): CredentialInput {
+  if (a.status === 'unavailable') return a
+  if (b.status === 'unavailable') return b
+  return { status: 'ok', accounts: [...a.accounts, ...b.accounts] }
+}
+
+export async function gatherMultiInputs(
+  addresses: `0x${string}`[],
   githubHandle: string | null,
   fetchers: Partial<Fetchers> = {},
   onSourceSettled?: (source: GatherSource) => void,
 ): Promise<GatherResult> {
+  if (addresses.length === 0) throw new Error('gatherMultiInputs requires at least one address')
   const f = { ...defaultFetchers, ...fetchers }
   const computedAt = Math.floor(Date.now() / 1000)
   const pocRpcSlugs = new Set(
@@ -51,23 +62,41 @@ export async function gatherInputs(
   const settle = <T,>(source: GatherSource, promise: Promise<T>): Promise<T> =>
     promise.finally(() => onSourceSettled?.(source))
 
-  const [chainResult, github, speedrun, verifiedBuilder] = await Promise.all([
-    settle('chains', f.chains(address, pocRpcSlugs)),
+  const [chainResults, github, speedruns, verifiedBuilders] = await Promise.all([
+    settle('chains', Promise.all(addresses.map((a) => f.chains(a, pocRpcSlugs)))),
     settle('github', f.github(githubHandle)),
-    settle('speedrun', f.speedrun(address)),
-    settle('verifiedBuilder', f.verifiedBuilder(address)),
+    settle('speedrun', Promise.all(addresses.map((a) => f.speedrun(a)))),
+    settle('verifiedBuilder', Promise.all(addresses.map((a) => f.verifiedBuilder(a)))),
   ])
+
+  const chainValues: Record<string, CredentialInput> = {}
+  for (const result of chainResults) {
+    for (const [slug, input] of Object.entries(result.values)) {
+      chainValues[slug] =
+        slug in chainValues ? mergeCredentialInputs(chainValues[slug], input) : input
+    }
+  }
 
   return {
     inputs: {
       computedAt,
       values: {
-        ...chainResult.values,
+        ...chainValues,
         ...github,
-        buidl_guidl_speedrun_ethereum: speedrun,
-        talent_protocol_verified_builder: verifiedBuilder,
+        buidl_guidl_speedrun_ethereum: speedruns.reduce(mergeCredentialInputs),
+        talent_protocol_verified_builder: verifiedBuilders.reduce(mergeCredentialInputs),
       },
     },
-    baseBlockNumber: chainResult.baseBlockNumber,
+    // The as-of anchor stays the primary wallet's.
+    baseBlockNumber: chainResults[0].baseBlockNumber,
   }
+}
+
+export async function gatherInputs(
+  address: `0x${string}`,
+  githubHandle: string | null,
+  fetchers: Partial<Fetchers> = {},
+  onSourceSettled?: (source: GatherSource) => void,
+): Promise<GatherResult> {
+  return gatherMultiInputs([address], githubHandle, fetchers, onSourceSettled)
 }
