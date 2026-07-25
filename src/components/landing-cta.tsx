@@ -43,7 +43,7 @@ export function LandingCta() {
     <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
       <button
         onClick={handleClick}
-        className="rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium hover:bg-emerald-500"
+        className="rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium transition-shadow hover:bg-emerald-500 hover:shadow-[0_0_24px_rgba(16,185,129,0.35)]"
       >
         Check your score
       </button>
