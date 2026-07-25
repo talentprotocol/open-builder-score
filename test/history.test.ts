@@ -90,3 +90,12 @@ describe('fetchScoreAttestationHistory', () => {
     expect(called).toBe(false)
   })
 })
+
+describe('parseHistoryResponse tolerant contract', () => {
+  it('returns ok with an empty list when every entry is undecodable', () => {
+    const result = parseHistoryResponse({
+      data: { attestations: [entry({ data: '0x1234' }), entry({ data: '0xdead' })] },
+    })
+    expect(result).toEqual({ status: 'ok', attestations: [] })
+  })
+})

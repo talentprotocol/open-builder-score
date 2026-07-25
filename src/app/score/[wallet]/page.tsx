@@ -52,7 +52,18 @@ export default function ResultsPage({
   }
   const githubHandle = github?.trim() || null
 
-  const [state, setState] = useState<State>({ phase: 'loading', settled: [] })
+  // Lazy init picks the right phase synchronously, avoiding a one-frame
+  // checklist flash on ENS/invalid URLs before the effect runs.
+  const [state, setState] = useState<State>(() =>
+    isAddress(wallet)
+      ? { phase: 'loading', settled: [] }
+      : looksLikeEnsName(wallet)
+        ? { phase: 'resolving' }
+        : {
+            phase: 'error',
+            message: 'That doesn’t look like an EVM address (0x…, 40 hex chars) or ENS name.',
+          },
+  )
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
