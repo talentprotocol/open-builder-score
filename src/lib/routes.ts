@@ -7,7 +7,7 @@ export function scorePath(wallet: string, github: string | null): string {
   return handle ? `${base}?github=${encodeURIComponent(handle)}` : base
 }
 
-export function inputPath(wallet: string | null, github: string | null): string {
+export function inputPath(wallet: string | null = null, github: string | null = null): string {
   const params = new URLSearchParams()
   const addr = wallet?.trim() ?? ''
   const handle = github?.trim() ?? ''

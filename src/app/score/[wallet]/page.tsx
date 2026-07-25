@@ -27,7 +27,14 @@ export default function ResultsPage({
 }) {
   const { wallet: rawWallet } = use(params)
   const { github } = use(searchParams)
-  const wallet = decodeURIComponent(rawWallet)
+  let wallet: string
+  try {
+    wallet = decodeURIComponent(rawWallet)
+  } catch {
+    // Malformed percent-encoding: fall through with the raw segment, which
+    // fails isAddress and surfaces the normal error state.
+    wallet = rawWallet
+  }
   const githubHandle = github?.trim() || null
 
   const [state, setState] = useState<State>({ phase: 'loading' })
@@ -76,7 +83,7 @@ export default function ResultsPage({
       {state.phase === 'error' && (
         <div className="flex flex-col gap-3 rounded-lg border border-zinc-700 p-4">
           <p className="text-sm text-red-400">{state.message}</p>
-          <Link href="/score" className="text-sm text-emerald-400 underline">
+          <Link href={inputPath()} className="text-sm text-emerald-400 underline">
             ← Back to the form
           </Link>
         </div>

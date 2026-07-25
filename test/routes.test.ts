@@ -27,6 +27,10 @@ describe('inputPath', () => {
     expect(inputPath(null, null)).toBe('/score')
   })
 
+  it('is bare /score when called with no arguments', () => {
+    expect(inputPath()).toBe('/score')
+  })
+
   it('carries wallet and github prefill params', () => {
     expect(inputPath(WALLET, 'octocat')).toBe(`/score?wallet=${WALLET}&github=octocat`)
   })
