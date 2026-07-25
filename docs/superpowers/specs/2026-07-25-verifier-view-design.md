@@ -17,15 +17,17 @@ wallet/handle from live public data, and renders an honest verdict.
   (validated `0x` + 64 hex chars), submit navigates to `/verify/[uid]`.
 - **`/verify/[uid]`** (client): the verifier. Phases:
   1. *Fetching attestation…* — easscan GraphQL lookup by UID.
-  2. Static integrity checks (no recompute needed). Any failure → ❌ invalid
-     card listing all problems + link back to `/verify`:
-     - UID malformed / attestation not found / easscan unreachable
-     - `schemaId` ≠ our `ATTEST_SCHEMA_UID` (not a Builder Score attestation)
-     - revoked (`revocationTime` ≠ 0)
-     - data doesn't ABI-decode against our schema
-     - `recipient` ≠ decoded `wallet` field
-     - attested `spec_version` ≠ current `spec.version` (we can only faithfully
-       recompute the spec this app ships)
+  2. Static classification (no recompute needed), precedence
+     malformed > revoked > spec_mismatch > ok:
+     - ❌ **malformed** (red card listing all problems + link back to
+       `/verify`): UID malformed / attestation not found / easscan
+       unreachable / `schemaId` ≠ our `ATTEST_SCHEMA_UID` / data doesn't
+       ABI-decode against our schema / `recipient` ≠ decoded `wallet`.
+     - ⚠️ **not comparable** (amber card + attestation details, no
+       recompute) for *authentic* attestations we can't compare: revoked
+       (`revocationTime` ≠ 0, framed as "withdrawn", not as invalid), or
+       attested `spec_version` ≠ current `spec.version` (we can only
+       faithfully recompute the spec this app ships).
   3. *Recomputing…* — existing `gatherInputs` + `computeScore` for the decoded
      wallet + github handle (current time anchor; drift is expected and named).
   4. Verdict banner:
@@ -35,8 +37,10 @@ wallet/handle from live public data, and renders an honest verdict.
      - ⚠️ **incomplete** — recompute had unavailable sources
        (`!score.complete`); comparison is explicitly partial.
   5. Details list (wallet linking to its `/score/…` page, github handle, spec
-     version, attested-on date, attester, easscan link) + the full recomputed
-     per-credential breakdown (reusing `CredentialCard`).
+     version, attested-on date, the embedded as-of anchor — computed-at time
+     and Base block — attester, easscan link) + the full recomputed
+     per-credential breakdown (reusing `CredentialCard`). The details list is
+     shared with the not-comparable card (which omits the breakdown).
 - Segment layout `/verify/layout.tsx` (server) provides static metadata for
   both pages.
 
