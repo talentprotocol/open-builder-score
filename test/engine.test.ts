@@ -134,3 +134,31 @@ describe('computeScore — unavailable propagation', () => {
 describe('round2', () => {
   it('rounds to 2 decimals', () => expect(round2(5.249999)).toBe(5.25))
 })
+
+describe('multi-account aggregation', () => {
+  const miniSpec: Spec = {
+    name: 'test',
+    version: 'test',
+    constants: { SECONDS_IN_A_YEAR: 31536000 },
+    credentials: [
+      { slug: 'sum_cred', name: 'Sum', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'sum_all', poc: true },
+      { slug: 'max_cred', name: 'Max', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'max_value', poc: true },
+    ],
+  }
+  it('sum_all sums accounts across wallets', () => {
+    const result = computeScore(
+      { computedAt: 1, values: { sum_cred: { status: 'ok', accounts: [2, 3] }, max_cred: { status: 'ok', accounts: [0] } } },
+      miniSpec,
+    )
+    expect(result.perCredential.find((c) => c.slug === 'sum_cred')?.points).toBe(5)
+    expect(result.perCredential.find((c) => c.slug === 'sum_cred')?.rawValue).toBe(5)
+  })
+  it('max_value takes the best account across wallets', () => {
+    const result = computeScore(
+      { computedAt: 1, values: { sum_cred: { status: 'ok', accounts: [0] }, max_cred: { status: 'ok', accounts: [7, 4] } } },
+      miniSpec,
+    )
+    expect(result.perCredential.find((c) => c.slug === 'max_cred')?.points).toBe(7)
+    expect(result.perCredential.find((c) => c.slug === 'max_cred')?.rawValue).toBe(7)
+  })
+})

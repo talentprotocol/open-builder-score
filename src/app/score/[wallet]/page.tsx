@@ -118,7 +118,7 @@ export default function ResultsPage({
         if (cancelled) return
         setState({
           phase: 'done',
-          scored: { score: computeScore(gather.inputs, spec), gather, address, githubHandle },
+          scored: { score: computeScore(gather.inputs, spec), gather, address, githubHandle, extraAddresses: [] },
         })
       } catch {
         if (!cancelled) {
