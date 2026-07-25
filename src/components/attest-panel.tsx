@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { attestScore, ATTEST_CHAIN_ID, EASSCAN_SITE } from '@/lib/eas'
-import { verifyPath } from '@/lib/routes'
+import { scorePath, verifyPath } from '@/lib/routes'
 import { useGithubAuth } from '@/components/use-github-auth'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
@@ -29,6 +29,25 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       <p className="text-xs text-amber-500">
         Attestation is disabled while any source is unavailable — an attested score must be
         computed from complete data.
+      </p>
+    )
+  }
+
+  // The onchain schema anchors exactly one wallet; attesting an aggregate
+  // would make recompute-and-verify diverge by construction.
+  if (scored.extraAddresses.length > 0) {
+    return (
+      <p className="text-xs text-zinc-500">
+        This is an aggregate across {scored.extraAddresses.length + 1} wallets, and the
+        attestation schema anchors exactly one wallet — so aggregate scores can&apos;t be
+        attested.{' '}
+        <Link
+          href={scorePath(scored.address, scored.githubHandle)}
+          className="text-emerald-400 underline"
+        >
+          Score the primary wallet alone
+        </Link>{' '}
+        to attest it.
       </p>
     )
   }
