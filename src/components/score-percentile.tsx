@@ -1,0 +1,31 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { fetchScorePercentile, type Percentile } from '@/lib/percentile'
+
+// Self-fetching, like AttestationHistory: renders nothing while loading, on
+// error, or when no comparable attestation corpus exists yet.
+export function ScorePercentile({ score }: { score: number }) {
+  const [percentile, setPercentile] = useState<Percentile | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setPercentile(null)
+    ;(async () => {
+      const result = await fetchScorePercentile(score)
+      if (!cancelled && result.status === 'ok') setPercentile(result.percentile)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [score])
+
+  if (percentile === null) return null
+  return (
+    <p className="text-xs text-zinc-500">
+      Higher than {percentile.countBelow} of {percentile.corpusSize} attested Builder{' '}
+      {percentile.corpusSize === 1 ? 'Score' : 'Scores'} · top {percentile.topPercent}%
+      {percentile.truncated && ' · based on the most recent 500'}
+    </p>
+  )
+}

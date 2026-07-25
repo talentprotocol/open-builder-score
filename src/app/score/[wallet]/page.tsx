@@ -17,6 +17,7 @@ import { CredentialCard } from '@/components/credential-card'
 import { AttestPanel } from '@/components/attest-panel'
 import { AttestationHistory } from '@/components/attestation-history'
 import { CopyLinkButton } from '@/components/copy-link-button'
+import { ScorePercentile } from '@/components/score-percentile'
 
 const spec = specJson as Spec
 
@@ -259,6 +260,8 @@ export default function ResultsPage({
               </p>
             ))}
           </div>
+
+          <ScorePercentile score={state.scored.score.total} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {state.scored.score.perCredential.map((result) => (
