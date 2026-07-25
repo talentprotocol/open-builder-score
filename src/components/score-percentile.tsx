@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { fetchScorePercentile, type Percentile } from '@/lib/percentile'
+import { FadeRise } from '@/components/motion/fade-rise'
 
 // Self-fetching, like AttestationHistory: renders nothing while loading, on
 // error, or when no comparable attestation corpus exists yet.
@@ -22,10 +23,12 @@ export function ScorePercentile({ score }: { score: number }) {
 
   if (percentile === null) return null
   return (
-    <p className="text-xs text-zinc-500">
-      Higher than {percentile.countBelow} of {percentile.corpusSize} attested Builder{' '}
-      {percentile.corpusSize === 1 ? 'Score' : 'Scores'} · top {percentile.topPercent}%
-      {percentile.truncated && ' · based on the most recent 500'}
-    </p>
+    <FadeRise>
+      <p className="text-xs text-zinc-500">
+        Higher than {percentile.countBelow} of {percentile.corpusSize} attested Builder{' '}
+        {percentile.corpusSize === 1 ? 'Score' : 'Scores'} · top {percentile.topPercent}%
+        {percentile.truncated && ' · based on the most recent 500'}
+      </p>
+    </FadeRise>
   )
 }

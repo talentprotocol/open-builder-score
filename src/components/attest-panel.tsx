@@ -7,6 +7,8 @@ import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
 import { attestScore, ATTEST_CHAIN_ID, EASSCAN_SITE } from '@/lib/eas'
 import { scorePath, verifyPath } from '@/lib/routes'
 import { useGithubAuth } from '@/components/use-github-auth'
+import { PingDot } from '@/components/motion/ping-dot'
+import { FadeRise } from '@/components/motion/fade-rise'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
 import type { Scored } from '@/lib/orchestrate'
@@ -119,7 +121,13 @@ export function AttestPanel({ scored }: { scored: Scored }) {
             disabled={busy}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
-            {busy ? 'Switching…' : 'Switch to Base Sepolia'}
+            {busy ? (
+              <span className="flex items-center gap-2">
+                <PingDot settled={false} /> Switching…
+              </span>
+            ) : (
+              'Switch to Base Sepolia'
+            )}
           </button>
         )}
         {connected && chainId === ATTEST_CHAIN_ID && (
@@ -128,28 +136,36 @@ export function AttestPanel({ scored }: { scored: Scored }) {
             disabled={busy || !walletClient}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
-            {busy ? 'Waiting for wallet…' : 'Attest onchain'}
+            {busy ? (
+              <span className="flex items-center gap-2">
+                <PingDot settled={false} /> Waiting for wallet…
+              </span>
+            ) : (
+              'Attest onchain'
+            )}
           </button>
         )}
       </div>
       {error && <p className="text-xs text-red-400 break-all">{error}</p>}
       {attestationUid && (
-        <div className="flex flex-col gap-1">
-          <a
-            href={`${EXPLORER_BASE}${attestationUid}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-emerald-400 underline break-all"
-          >
-            Attested — view {attestationUid} on easscan
-          </a>
-          <Link
-            href={verifyPath(attestationUid)}
-            className="text-xs text-emerald-400 underline"
-          >
-            Verify it here
-          </Link>
-        </div>
+        <FadeRise>
+          <div className="flex flex-col gap-1">
+            <a
+              href={`${EXPLORER_BASE}${attestationUid}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-emerald-400 underline break-all"
+            >
+              Attested — view {attestationUid} on easscan
+            </a>
+            <Link
+              href={verifyPath(attestationUid)}
+              className="text-xs text-emerald-400 underline"
+            >
+              Verify it here
+            </Link>
+          </div>
+        </FadeRise>
       )}
     </div>
   )
