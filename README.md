@@ -124,32 +124,37 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       `TrackedNFT` + the `app/services/data_points/*` contract maps.
 - [x] **1b. Scaffold** — Next.js 16 app via `create-next-app` ✅ (spec files get
       imported as JSON modules in phase 3).
-- [ ] **3. Engine** — `src/engine.ts`: pure `computeScore(inputs, spec) → {total, perCredential[]}`.
-      No DOM, no fetch — takes already-fetched raw values. Vitest with a golden test vector.
-- [ ] **4. Chain reads** — `src/chains.ts`: group registry entries by chain, one Multicall3
-      round-trip per chain (`balanceOf` / `balanceOf(id)` for 1155s), public RPCs with fallback.
-- [ ] **5. GitHub reads** — `src/github.ts`: the five metrics above, graceful on rate limits.
-- [ ] **6. UI** — input form → total score + credential cards (points, raw value, formula
-      applied, "not earned" state). The breakdown is the product.
-- [ ] **7. Attest** — define schema, register on **Base Sepolia** first, then Base mainnet;
-      "Attest onchain" button (user signs, user pays).
-      Proposed schema:
-      `string spec_version, address wallet, string github_handle, uint16 score, uint64 computed_at, uint64 block_number`
-      EAS on Base is the OP-stack predeploy — verify addresses when registering
-      (EAS `0x4200...0021`, SchemaRegistry `0x4200...0020`).
+- [x] **3. Engine** — `src/lib/engine.ts`: pure `computeScore(inputs, spec) → {total, perCredential[]}`.
+      ✅ No DOM, no fetch, no framework imports; Vitest golden vectors (154/257 across the
+      21 POC credentials).
+- [x] **4. Chain reads** — `src/lib/chains.ts` ✅: one Multicall3 round-trip per chain across
+      6 chains, public RPC fallback lists, cross-chain count merging, per-chain failure
+      isolation ("couldn't check" ≠ "not earned").
+- [x] **5. GitHub reads** — `src/lib/github.ts` ✅: the five metrics, paginated, graceful on
+      404/rate-limit.
+- [x] **6. UI** — ✅ form → total + credential cards (points, raw value, exact formula,
+      earned / not-earned / couldn't-check states) + as-of anchor footer.
+- [x] **7. Attest** — ✅ schema registered on **Base Sepolia** (schema
+      [#2265](https://base-sepolia.easscan.org/schema/view/0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd),
+      UID `0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd` — deterministic:
+      `keccak256(schema ++ zero resolver ++ revocable)`, golden-pinned in `test/eas.test.ts`).
+      Schema: `string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number`.
+      E2E verified 2026-07-25 incl. the wrong-network switch path. Base mainnet registration
+      deferred until after Sepolia validation (flip `ATTEST_CHAIN_ID` in `src/lib/eas.ts`).
 - [ ] **8. Deploy** — Vercel. No env vars, no secrets.
 
-## Remaining lookups (small)
+## Resolved lookups
 
-The production export and codebase extraction are done — `spec/badge-registry.json` holds
-every contract address. What's left:
+All three README-era unknowns were extracted from talent-api and live-verified (CORS open):
 
-1. **BuidlGuidl API base URL** — see `lib/buidl_guidl/client.rb` in talent-api; verify the
-   endpoint allows CORS from a browser.
-2. **TalentVault ABI fragment** — `userBalanceMeta(address)` return shape, from
-   `lib/abi/TalentVault.json` in talent-api (only the one function is needed).
-3. **EAS GraphQL endpoints** — `https://base.easscan.org/graphql` (+ Celo instance) for the
-   Verified Builder attestation lookup; confirm CORS.
+1. **SpeedRun Ethereum API** — `GET https://speedrunethereum.com/api/user-challenges/<address>`;
+   count unique `challengeId` where `reviewAction == "ACCEPTED"`.
+2. **TalentVault** — `userBalanceMeta(address)` returns `(depositedAmount, lastRewardCalculation,
+   lastDepositAt)`; production uses index 0 ÷ 1e18.
+3. **EAS GraphQL** — `https://base.easscan.org/graphql` + `https://celo.easscan.org/graphql`,
+   query by checksummed recipient + schema UID, excluding revoked. (Production quirk: a Ruby
+   `any?` short-circuit means prod effectively only queries Base; this POC follows the spec
+   and queries both.)
 
 ## Ground rules
 
