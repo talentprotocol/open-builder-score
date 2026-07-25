@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   fetchAuthenticatedUser,
   pollForToken,
@@ -69,51 +70,59 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
     setUi({ step: 'idle' })
   }
 
-  if (auth) {
-    return (
-      <p className="flex items-center gap-2 text-xs text-zinc-400">
-        <span className="text-emerald-400">✓ Signed in as @{auth.login}</span>
-        <button onClick={() => clearGithubAuth()} className="underline">
-          Sign out
-        </button>
-      </p>
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-1 text-xs text-zinc-400">
-      {ui.step === 'idle' && (
-        <button onClick={handleSignIn} className="self-start underline">
-          Sign in with GitHub to verify your handle
-        </button>
-      )}
-      {ui.step === 'starting' && <p>Contacting GitHub…</p>}
-      {ui.step === 'code' && (
-        <p>
-          Enter code{' '}
-          <span className="font-mono font-semibold text-zinc-200">{ui.userCode}</span> at{' '}
-          <a
-            href={ui.verificationUri}
-            target="_blank"
-            rel="noreferrer"
-            className="text-emerald-400 underline"
-          >
-            github.com/login/device
-          </a>{' '}
-          — waiting for approval…{' '}
-          <button onClick={handleCancel} className="underline">
-            cancel
-          </button>
-        </p>
-      )}
-      {ui.step === 'error' && (
-        <p className="text-red-400">
-          {ui.message}{' '}
-          <button onClick={handleSignIn} className="underline">
-            retry
-          </button>
-        </p>
-      )}
-    </div>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={auth ? 'chip' : ui.step}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.18 }}
+      >
+        {auth ? (
+          <p className="flex items-center gap-2 text-xs text-zinc-400">
+            <span className="text-emerald-400">✓ Signed in as @{auth.login}</span>
+            <button onClick={() => clearGithubAuth()} className="underline">
+              Sign out
+            </button>
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1 text-xs text-zinc-400">
+            {ui.step === 'idle' && (
+              <button onClick={handleSignIn} className="self-start underline">
+                Sign in with GitHub to verify your handle
+              </button>
+            )}
+            {ui.step === 'starting' && <p>Contacting GitHub…</p>}
+            {ui.step === 'code' && (
+              <p>
+                Enter code{' '}
+                <span className="font-mono font-semibold text-zinc-200">{ui.userCode}</span> at{' '}
+                <a
+                  href={ui.verificationUri}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-400 underline"
+                >
+                  github.com/login/device
+                </a>{' '}
+                — waiting for approval…{' '}
+                <button onClick={handleCancel} className="underline">
+                  cancel
+                </button>
+              </p>
+            )}
+            {ui.step === 'error' && (
+              <p className="text-red-400">
+                {ui.message}{' '}
+                <button onClick={handleSignIn} className="underline">
+                  retry
+                </button>
+              </p>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </AnimatePresence>
   )
 }
