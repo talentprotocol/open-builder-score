@@ -656,6 +656,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useAccount } from 'wagmi'
+import { inputPath } from '@/lib/routes'
 
 export function LandingCta() {
   const router = useRouter()
@@ -671,7 +672,7 @@ export function LandingCta() {
     if (connectModalOpen) modalWasOpen.current = true
     if (pending.current && isConnected) {
       pending.current = false
-      router.push('/score')
+      router.push(inputPath())
     } else if (pending.current && modalWasOpen.current && !connectModalOpen && !isConnected) {
       // Modal closed without a connection: cancel the pending redirect. If the
       // close event races ahead of the connect event, the user simply stays on
@@ -682,7 +683,7 @@ export function LandingCta() {
 
   function handleClick() {
     if (isConnected) {
-      router.push('/score')
+      router.push(inputPath())
       return
     }
     pending.current = true
@@ -697,7 +698,7 @@ export function LandingCta() {
       >
         Check your score
       </button>
-      <Link href="/score" className="text-sm text-zinc-400 underline">
+      <Link href={inputPath()} className="text-sm text-zinc-400 underline">
         or check any address
       </Link>
     </div>
