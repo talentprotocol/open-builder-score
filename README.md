@@ -5,6 +5,8 @@ Builder Score computed **entirely in the browser** from public data — badges a
 holdings via RPC, GitHub via its public API — with an optional one-click EAS attestation
 on Base. No backend, no database of people, no accounts.
 
+**Live at [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app)** (Base Sepolia attestations while in POC).
+
 Context docs (internal):
 
 - [What It Is (and Isn't)](https://app.notion.com/p/Open-Builder-Score-What-It-Is-and-Isn-t-3a771f7adb2081208e21f09a0aa8da8c) — concept, math, product shape
@@ -141,7 +143,11 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       Schema: `string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number`.
       E2E verified 2026-07-25 incl. the wrong-network switch path. Base mainnet registration
       deferred until after Sepolia validation (flip `ATTEST_CHAIN_ID` in `src/lib/eas.ts`).
-- [ ] **8. Deploy** — Vercel. No env vars, no secrets.
+- [x] **8. Deploy** — Vercel ✅ 2026-07-25: [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app).
+      No env vars, no secrets — the only server-side code is the two stateless GitHub
+      device-flow passthrough routes (`/api/github/*`), which hold no state and pin the
+      public client ID. Deployed via `vercel deploy --prod` from local `main`
+      (no git integration yet — redeploys are manual).
 
 ## Resolved lookups
 
