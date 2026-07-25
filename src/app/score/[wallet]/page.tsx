@@ -18,6 +18,12 @@ import { AttestPanel } from '@/components/attest-panel'
 import { AttestationHistory } from '@/components/attestation-history'
 import { CopyLinkButton } from '@/components/copy-link-button'
 import { ScorePercentile } from '@/components/score-percentile'
+import { motion } from 'motion/react'
+import { FadeRise } from '@/components/motion/fade-rise'
+import { Stagger, StaggerItem } from '@/components/motion/stagger'
+import { ScoreCountUp } from '@/components/motion/score-count-up'
+import { PingDot } from '@/components/motion/ping-dot'
+import { SweepOverlay } from '@/components/motion/sweep-overlay'
 
 const spec = specJson as Spec
 
@@ -183,23 +189,34 @@ export default function ResultsPage({
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
       {state.phase === 'resolving' && (
-        <p className="text-sm text-zinc-400">Resolving ENS name…</p>
+        <p className="flex items-center gap-2.5 text-sm text-zinc-400">
+          <PingDot settled={false} /> Resolving ENS name…
+        </p>
       )}
 
       {state.phase === 'loading' && (
-        <ul className="flex flex-col gap-2 text-sm">
-          {SOURCES.map((source) => {
-            const done = state.settled.includes(source)
-            return (
-              <li key={source} className={done ? 'text-emerald-400' : 'text-zinc-500'}>
-                {done ? '✓' : '○'}{' '}
-                {source === 'chains' && extrasRaw.length > 0
-                  ? `Onchain badges & balances (6 chains, ${extrasRaw.length + 1} wallets)`
-                  : SOURCE_LABELS[source]}
-              </li>
-            )
-          })}
-        </ul>
+        <div className="blueprint-grid relative overflow-hidden rounded-lg border border-zinc-800 p-6">
+          <SweepOverlay />
+          <ul className="flex flex-col gap-3 text-sm">
+            {SOURCES.map((source) => {
+              const done = state.settled.includes(source)
+              return (
+                <li
+                  key={source}
+                  className={`flex items-center gap-2.5 ${done ? 'text-emerald-400' : 'text-zinc-500'}`}
+                >
+                  <PingDot settled={done} />
+                  {source === 'chains' && extrasRaw.length > 0
+                    ? `Onchain badges & balances (6 chains, ${extrasRaw.length + 1} wallets)`
+                    : SOURCE_LABELS[source]}
+                </li>
+              )
+            })}
+          </ul>
+          <p className="mt-5 font-mono text-[10px] tracking-[0.18em] text-emerald-400/80">
+            SCANNING SOURCES
+          </p>
+        </div>
       )}
 
       {state.phase === 'error' && (
@@ -221,9 +238,13 @@ export default function ResultsPage({
 
       {state.phase === 'done' && (
         <section className="flex flex-col gap-6">
+          <p className="font-mono text-[10px] tracking-[0.18em] text-zinc-600">
+            COMPUTED IN YOUR BROWSER
+          </p>
+          <FadeRise>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-baseline gap-3">
-              <span className="text-5xl font-bold tabular-nums">{state.scored.score.total}</span>
+              <ScoreCountUp value={state.scored.score.total} className="text-5xl font-bold" />
               <span className="text-zinc-500">/ {state.scored.score.maxTotal}</span>
               {!state.scored.score.complete && (
                 <span className="flex items-center gap-2 text-xs text-amber-500">
@@ -244,7 +265,9 @@ export default function ResultsPage({
               </Link>
             </div>
           </div>
+          </FadeRise>
 
+          <FadeRise delay={0.08}>
           <div className="flex flex-col gap-0.5">
             <p className="break-all font-mono text-xs text-zinc-500">
               {state.scored.address}
@@ -260,15 +283,35 @@ export default function ResultsPage({
               </p>
             ))}
           </div>
+          </FadeRise>
 
           <ScorePercentile score={state.scored.score.total} />
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {state.scored.score.perCredential.map((result) => (
-              <CredentialCard key={result.slug} result={result} />
+              <StaggerItem key={result.slug}>
+                <motion.div
+                  className="rounded-lg"
+                  initial={false}
+                  animate={
+                    result.state === 'earned'
+                      ? {
+                          boxShadow: [
+                            '0 0 0 1px rgba(52, 211, 153, 0.55)',
+                            '0 0 0 1px rgba(52, 211, 153, 0)',
+                          ],
+                        }
+                      : {}
+                  }
+                  transition={{ duration: 1.2, delay: 0.5, ease: 'easeOut' }}
+                >
+                  <CredentialCard result={result} />
+                </motion.div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
 
+          <FadeRise delay={0.15}>
           <p className="text-xs text-zinc-600">
             github_repositories approximates production (public repo count vs. repos
             contributed-to). Computed at{' '}
@@ -277,10 +320,15 @@ export default function ResultsPage({
               `, Base block ${state.scored.gather.baseBlockNumber}`}
             .
           </p>
+          </FadeRise>
 
-          <AttestPanel scored={state.scored} />
+          <FadeRise delay={0.2}>
+            <AttestPanel scored={state.scored} />
+          </FadeRise>
 
-          <AttestationHistory wallet={state.scored.address} />
+          <FadeRise delay={0.25}>
+            <AttestationHistory wallet={state.scored.address} />
+          </FadeRise>
         </section>
       )}
     </main>
