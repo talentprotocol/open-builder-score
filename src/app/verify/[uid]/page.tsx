@@ -5,6 +5,9 @@ import Link from 'next/link'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
 import { gatherInputs } from '@/lib/orchestrate'
+import { readGithubCredentials } from '@/lib/github'
+import { authorizedFetch } from '@/lib/github-auth'
+import { useGithubAuth } from '@/components/use-github-auth'
 import {
   classifyAttestation,
   decodeAttestationData,
@@ -109,6 +112,7 @@ function AttestationDetails({
 export default function VerifyUidPage({ params }: { params: Promise<{ uid: string }> }) {
   const { uid: rawUid } = use(params)
   const uid = rawUid.trim()
+  const auth = useGithubAuth()
 
   const [state, setState] = useState<State>({ phase: 'loading', step: 'Fetching attestation…' })
 
@@ -150,9 +154,13 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
       }
       setState({ phase: 'loading', step: 'Recomputing the score from public data…' })
       try {
+        const fetchers = auth
+          ? { github: (handle: string | null) => readGithubCredentials(handle, authorizedFetch(auth.token)) }
+          : {}
         const gather = await gatherInputs(
           classification.decoded.wallet,
           classification.decoded.githubHandle,
+          fetchers,
         )
         if (cancelled) return
         const recomputed = computeScore(gather.inputs, spec)
@@ -175,7 +183,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
     return () => {
       cancelled = true
     }
-  }, [uid])
+  }, [uid, auth])
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
