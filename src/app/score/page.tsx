@@ -2,12 +2,15 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { AnimatePresence, motion } from 'motion/react'
 import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { scorePath } from '@/lib/routes'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { GithubSignIn } from '@/components/github-sign-in'
 import { useGithubAuth } from '@/components/use-github-auth'
+import { FadeRise } from '@/components/motion/fade-rise'
+import { SPRING_SOFT } from '@/components/motion/presets'
 
 function ScoreForm() {
   const router = useRouter()
@@ -16,13 +19,15 @@ function ScoreForm() {
 
   const [addressInput, setAddressInput] = useState(() => searchParams.get('wallet') ?? '')
   const [githubInput, setGithubInput] = useState(() => searchParams.get('github') ?? '')
-  const [extraInputs, setExtraInputs] = useState<string[]>(() => {
+  const nextRowId = useRef(0)
+  const [extraInputs, setExtraInputs] = useState<{ id: number; value: string }[]>(() => {
     const raw = searchParams.get('wallets') ?? ''
     return raw
       .split(',')
       .map((w) => w.trim())
       .filter((w) => w !== '')
       .slice(0, 4)
+      .map((value) => ({ id: nextRowId.current++, value }))
   })
   const [error, setError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
@@ -64,7 +69,7 @@ function ScoreForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     const primary = addressInput.trim()
-    const extras = extraInputs.map((w) => w.trim()).filter((w) => w !== '')
+    const extras = extraInputs.map((w) => w.value.trim()).filter((w) => w !== '')
     setError(null)
     setResolving(true)
     const results = await Promise.all([primary, ...extras].map(resolveWallet))
@@ -101,41 +106,54 @@ function ScoreForm() {
             setAddressInput(e.target.value)
           }}
           placeholder="0x… or name.eth"
-          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
+          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
           spellCheck={false}
         />
       </div>
-      {extraInputs.map((value, i) => (
-        <div key={i} className="flex flex-col gap-1.5">
-          <label htmlFor={`wallet-${i + 2}`} className="text-xs font-medium text-zinc-400">
-            Wallet {i + 2}
-          </label>
-          <div className="flex gap-2">
-            <input
-              id={`wallet-${i + 2}`}
-              value={value}
-              onChange={(e) =>
-                setExtraInputs((prev) => prev.map((w, j) => (j === i ? e.target.value : w)))
-              }
-              placeholder="0x… or name.eth"
-              className="flex-1 rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
-              spellCheck={false}
-            />
-            <button
-              type="button"
-              aria-label={`Remove wallet ${i + 2}`}
-              onClick={() => setExtraInputs((prev) => prev.filter((_, j) => j !== i))}
-              className="rounded-md border border-zinc-700 px-3 text-sm text-zinc-400"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      ))}
+      <AnimatePresence initial={false}>
+        {extraInputs.map((row, i) => (
+          <motion.div
+            key={row.id}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={SPRING_SOFT}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-1.5 pb-0.5">
+              <label htmlFor={`wallet-${i + 2}`} className="text-xs font-medium text-zinc-400">
+                Wallet {i + 2}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id={`wallet-${i + 2}`}
+                  value={row.value}
+                  onChange={(e) =>
+                    setExtraInputs((prev) =>
+                      prev.map((r) => (r.id === row.id ? { ...r, value: e.target.value } : r)),
+                    )
+                  }
+                  placeholder="0x… or name.eth"
+                  className="flex-1 rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove wallet ${i + 2}`}
+                  onClick={() => setExtraInputs((prev) => prev.filter((r) => r.id !== row.id))}
+                  className="rounded-md border border-zinc-700 px-3 text-sm text-zinc-400"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
       {extraInputs.length < 4 && (
         <button
           type="button"
-          onClick={() => setExtraInputs((prev) => [...prev, ''])}
+          onClick={() => setExtraInputs((prev) => [...prev, { id: nextRowId.current++, value: '' }])}
           className="self-start text-xs text-zinc-400 underline"
         >
           + Add another wallet
@@ -153,7 +171,7 @@ function ScoreForm() {
             setGithubInput(e.target.value)
           }}
           placeholder="octocat"
-          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm"
+          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
           spellCheck={false}
         />
       </div>
@@ -177,17 +195,19 @@ function ScoreForm() {
 
 export default function ScorePage() {
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">Check a Builder Score</h1>
-        <p className="text-sm text-zinc-400">
-          Enter any wallet or ENS name — add up to 4 more to aggregate one score across them.
-          Scoring runs entirely in your browser — connecting a wallet is only needed to attest.
-        </p>
-      </header>
-      <Suspense fallback={null}>
-        <ScoreForm />
-      </Suspense>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col">
+      <FadeRise className="flex flex-col gap-8">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold">Check a Builder Score</h1>
+          <p className="text-sm text-zinc-400">
+            Enter any wallet or ENS name — add up to 4 more to aggregate one score across them.
+            Scoring runs entirely in your browser — connecting a wallet is only needed to attest.
+          </p>
+        </header>
+        <Suspense fallback={null}>
+          <ScoreForm />
+        </Suspense>
+      </FadeRise>
     </main>
   )
 }

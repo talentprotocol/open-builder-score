@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { motion } from 'motion/react'
 
 export function CopyLinkButton() {
   const [copied, setCopied] = useState(false)
@@ -16,8 +17,13 @@ export function CopyLinkButton() {
   }
 
   return (
-    <button onClick={handleCopy} className="text-sm text-zinc-400 underline">
+    <motion.button
+      onClick={handleCopy}
+      animate={copied ? { scale: [1, 1.08, 1] } : {}}
+      transition={{ duration: 0.3 }}
+      className="text-sm text-zinc-400 underline"
+    >
       {copied ? 'Copied!' : 'Copy link'}
-    </button>
+    </motion.button>
   )
 }
