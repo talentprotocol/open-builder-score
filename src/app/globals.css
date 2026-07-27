@@ -1,32 +1,171 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
+  /* Font families (Talent: Geist body, Geist Mono metrics, Cal Sans headings) */
+  --font-sans: var(--font-geist-sans, "Geist", system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, "Geist Mono", monospace);
+  --font-heading: var(--font-cal-sans, "Cal Sans", sans-serif);
+
+  /* Talent type scale — 14px body base */
+  --text-xs: 0.625rem; /* 10px */
+  --text-xs--line-height: 0.9375rem;
+  --text-sm: 0.75rem; /* 12px */
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem; /* 14px */
+  --text-base--line-height: 1.3125rem;
+  --text-md: 1rem; /* 16px */
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.125rem; /* 18px */
+  --text-lg--line-height: 1.35rem;
+  --text-xl: 1.5rem; /* 24px */
+  --text-xl--line-height: 1.8rem;
+  --text-2xl: 2.25rem; /* 36px */
+  --text-2xl--line-height: 2.7rem;
+  --text-3xl: 3rem; /* 48px */
+  --text-3xl--line-height: 3.6rem;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  /* Light Mode - Gray (Talent) */
+  --background: theme(colors.gray.50);
+  --foreground: theme(colors.gray.950);
+  --card: theme(colors.white);
+  --card-foreground: theme(colors.gray.950);
+  --popover: theme(colors.white);
+  --popover-foreground: theme(colors.gray.950);
+  --primary: theme(colors.gray.950);
+  --primary-foreground: theme(colors.gray.50);
+  --secondary: theme(colors.gray.200);
+  --secondary-foreground: theme(colors.gray.950);
+  --muted: theme(colors.white);
+  --muted-foreground: theme(colors.gray.600);
+  --accent: theme(colors.gray.100);
+  --accent-foreground: theme(colors.gray.900);
+  --destructive: theme(colors.red.500);
+  --destructive-foreground: theme(colors.white);
+  --warning: theme(colors.amber.500);
+  --warning-foreground: theme(colors.white);
+  --success: theme(colors.emerald.500);
+  --success-foreground: theme(colors.white);
+  --border: theme(colors.gray.200);
+  --input: theme(colors.gray.200);
+  --ring: theme(colors.gray.400);
+
+  /* Signal tokens (app-specific): emerald carries meaning only.
+     Alphas are per-theme; light needs more presence on gray-50. */
+  --signal: var(--success);
+  --grid-line: color-mix(in oklab, var(--signal) 8%, transparent);
+  --signal-glow: color-mix(in oklab, var(--signal) 15%, transparent);
+  --signal-flash: color-mix(in oklab, var(--signal) 55%, transparent);
+}
+
+.dark {
+  color-scheme: dark;
+  /* Dark Mode - Neutral (Talent) */
+  --background: theme(colors.neutral.950);
+  --foreground: theme(colors.neutral.50);
+  --card: theme(colors.neutral.900);
+  --card-foreground: theme(colors.neutral.50);
+  --popover: theme(colors.neutral.900);
+  --popover-foreground: theme(colors.neutral.50);
+  --primary: theme(colors.neutral.50);
+  --primary-foreground: theme(colors.neutral.950);
+  --secondary: theme(colors.neutral.800);
+  --secondary-foreground: theme(colors.neutral.50);
+  --muted: theme(colors.neutral.900);
+  --muted-foreground: theme(colors.neutral.500);
+  --accent: theme(colors.neutral.800);
+  --accent-foreground: theme(colors.neutral.50);
+  --destructive: theme(colors.red.600);
+  --destructive-foreground: theme(colors.neutral.50);
+  --warning: theme(colors.amber.500);
+  --warning-foreground: theme(colors.neutral.50);
+  --success: theme(colors.emerald.500);
+  --success-foreground: theme(colors.neutral.50);
+  --border: theme(colors.neutral.800);
+  --input: theme(colors.neutral.800);
+  --ring: theme(colors.neutral.600);
+
+  --grid-line: color-mix(in oklab, var(--signal) 6%, transparent);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: var(--ring);
+  }
+
+  /* Instant theme switches — no crossfade (Talent convention) */
+  .theme-transitioning *,
+  .theme-transitioning *::before,
+  .theme-transitioning *::after {
+    transition: none !important;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  a,
+  button {
+    cursor: pointer;
+  }
+
+  *:focus {
+    outline: none;
+  }
+
+  *:focus-visible {
+    outline: none;
+  }
+
+  a:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+    border-radius: calc(var(--radius) - 2px);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility font-heading {
+  font-family: var(--font-heading);
 }
 
 .blueprint-grid {
-  background-image: linear-gradient(rgba(52, 211, 153, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(52, 211, 153, 0.04) 1px, transparent 1px);
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 22px 22px;
 }
