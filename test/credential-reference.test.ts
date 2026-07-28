@@ -8,7 +8,7 @@ import {
   formatFormula,
   groupCredentials,
 } from '@/lib/credential-reference'
-import type { Conversion, Spec, SpecCredential } from '@/lib/types'
+import type { Calculation, Conversion, Spec, SpecCredential } from '@/lib/types'
 
 const spec = specJson as Spec
 
@@ -79,6 +79,12 @@ describe('formatFormula', () => {
   it('throws on an unknown conversion', () => {
     expect(() => formatFormula(cred({ conversion: 'cubed' as Conversion }))).toThrow(/conversion/)
   })
+
+  it('renders a well-formed formula for every active credential', () => {
+    for (const c of spec.credentials.filter((c) => c.poc)) {
+      expect(formatFormula(c)).toMatch(/^min\(round\(.+ × .+\), \d+\)$/)
+    }
+  })
 })
 
 describe('describeValue', () => {
@@ -97,6 +103,16 @@ describe('describeCalculation', () => {
   it('labels both aggregation modes', () => {
     expect(describeCalculation(cred({ calculation: 'sum_all' }))).toBe('summed across wallets')
     expect(describeCalculation(cred({ calculation: 'max_value' }))).toBe('best wallet counts')
+  })
+
+  it('has no label for single-handle GitHub credentials', () => {
+    expect(describeCalculation(cred({ tier: 'github_public', calculation: 'sum_all' }))).toBeNull()
+  })
+
+  it('throws on an unknown calculation', () => {
+    expect(() => describeCalculation(cred({ calculation: 'median' as Calculation }))).toThrow(
+      /calculation/,
+    )
   })
 })
 

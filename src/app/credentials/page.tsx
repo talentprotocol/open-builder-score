@@ -60,9 +60,11 @@ export default function CredentialsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">Measures: {describeValue(c)}</p>
                   <p className="font-mono text-sm text-muted-foreground/80">{formatFormula(c)}</p>
-                  <Badge compact className="mt-1">
-                    {describeCalculation(c)}
-                  </Badge>
+                  {describeCalculation(c) && (
+                    <Badge compact className="mt-1">
+                      {describeCalculation(c)}
+                    </Badge>
+                  )}
                   {displayNote(c) && (
                     <p className="text-sm text-muted-foreground/80">{displayNote(c)}</p>
                   )}

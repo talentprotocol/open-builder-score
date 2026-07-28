@@ -1,7 +1,7 @@
 // Display-layer derivation of the credential reference from spec.json — the
 // same file the engine scores with, so the reference can never drift.
 // Pure module: no framework, no fetches. Unknown enum values throw so a bad
-// spec edit fails the build and tests instead of shipping a wrong page.
+// spec edit fails the tests instead of shipping a wrong page.
 
 import type { Spec, SpecCredential } from './types'
 
@@ -23,6 +23,10 @@ export function groupCredentials(spec: Spec): CredentialGroup[] {
     {
       key: 'chains',
       label: 'Onchain badges & balances',
+      // Deliberate negation: everything not claimed by the three specific
+      // groups lands here, so every active credential appears somewhere (the
+      // coverage test enforces it). A positive tier filter would silently drop
+      // a newly activated credential on an unlisted tier.
       credentials: active.filter(
         (c) => c.tier !== 'github_public' && c.slug !== SPEEDRUN_SLUG && c.slug !== EAS_SLUG,
       ),
@@ -86,9 +90,18 @@ export function describeValue(c: SpecCredential): string {
   return description
 }
 
-// Multi-wallet aggregation, in the user's terms.
-export function describeCalculation(c: SpecCredential): string {
-  return c.calculation === 'sum_all' ? 'summed across wallets' : 'best wallet counts'
+// Multi-wallet aggregation, in the user's terms. GitHub data comes from a
+// single handle — wallets never change those points — so no label there.
+export function describeCalculation(c: SpecCredential): string | null {
+  if (c.tier === 'github_public') return null
+  switch (c.calculation as string) {
+    case 'sum_all':
+      return 'summed across wallets'
+    case 'max_value':
+      return 'best wallet counts'
+    default:
+      throw new Error(`no label for calculation: ${c.calculation}`)
+  }
 }
 
 // Curated user-facing notes. Raw spec notes are dev-facing and stay out of
