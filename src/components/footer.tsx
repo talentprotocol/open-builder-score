@@ -1,13 +1,9 @@
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@phosphor-icons/react/dist/ssr'
-import specJson from '../../spec/spec.json'
 import { ATTEST_SCHEMA_UID, EASSCAN_SITE } from '@/lib/eas'
 import { verifyPath } from '@/lib/routes'
-import type { Spec } from '@/lib/types'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
 import { ThemeToggle } from '@/components/theme-toggle'
-
-const spec = specJson as Spec
 
 const SCHEMA_URL = `${EASSCAN_SITE}/schema/view/${ATTEST_SCHEMA_UID}`
 
@@ -18,7 +14,7 @@ export function Footer() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <p className="text-sm text-muted-foreground">
-            Computed entirely in your browser from public data. No backend. · spec v{spec.version}
+            An open score anyone can recompute from public data.
           </p>
         </div>
         <div className="flex items-center gap-4">

@@ -26,7 +26,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Open Builder Score",
   description:
-    "A self-scoring page: enter a wallet and get an explainable Builder Score computed entirely in your browser from public data. Built by Talent Protocol.",
+    "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol.",
 };
 
 export default function RootLayout({

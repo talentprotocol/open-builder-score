@@ -1,22 +1,18 @@
 import type { Metadata } from 'next'
-import specJson from '../../spec/spec.json'
-import type { Spec } from '@/lib/types'
 import { LandingCta } from '@/components/landing-cta'
 import { HeroScan } from '@/components/hero-scan'
 import { FadeRise } from '@/components/motion/fade-rise'
 
-const spec = specJson as Spec
-
 export const metadata: Metadata = {
-  title: 'Open Builder Score — an explainable, attestable builder score',
+  title: 'Open Builder Score — an open score anyone can compute',
   description:
-    'Compute a Builder Score entirely in your browser from public onchain and GitHub data, see the exact math behind every point, and attest it on Base.',
+    'An open Builder Score anyone can compute in their browser from public onchain and GitHub data — with the exact math behind every point, attestable on Base.',
 }
 
 const VALUE_PROPS = [
   {
     title: 'Computed in your browser',
-    body: 'Public RPC and public APIs only. No backend, no accounts — nothing leaves your machine except the queries themselves.',
+    body: 'Public RPC and public APIs only — no accounts, and nothing leaves your machine except the queries themselves.',
   },
   {
     title: 'Attested onchain',
@@ -24,7 +20,7 @@ const VALUE_PROPS = [
   },
   {
     title: 'Anyone can run it',
-    body: `Open spec (v${spec.version}), open math. The same inputs always produce the same score.`,
+    body: 'Open spec, open math. The same inputs always produce the same score.',
   },
 ]
 
@@ -44,8 +40,8 @@ export default function Landing() {
             A builder score you don&apos;t have to trust.
           </h1>
           <p className="max-w-xl text-muted-foreground">
-            Open Builder Score computes an explainable Builder Score entirely in your browser from
-            public data — then lets you attest it onchain.
+            An open score anyone can compute — explainable, computed in your browser from public
+            data, and attestable onchain.
           </p>
           <LandingCta />
         </div>
