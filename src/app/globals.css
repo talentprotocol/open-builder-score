@@ -168,7 +168,10 @@
     outline: none;
   }
 
-  a:focus-visible {
+  /* Keyboard focus ring for links and raw buttons. The Button primitive's own
+     focus-visible:ring utility layers over this and wins (utilities cascade
+     after base), so styled Buttons still render exactly one ring. */
+  :is(a, button):focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
     border-radius: calc(var(--radius) - 2px);
