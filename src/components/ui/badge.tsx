@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react'
 const variants = {
   neutral: 'border-border bg-accent/40 text-foreground',
   success: 'border-success/30 bg-success/10 text-success-text',
-  warning: 'border-warning/30 bg-warning/10 text-warning',
+  warning: 'border-warning/30 bg-warning/10 text-warning-text',
 } as const
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {

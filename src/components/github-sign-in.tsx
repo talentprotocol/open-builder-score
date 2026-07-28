@@ -116,7 +116,7 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
               </p>
             )}
             {ui.step === 'error' && (
-              <p className="text-destructive">
+              <p className="text-destructive-text">
                 {ui.message}{' '}
                 <button onClick={handleSignIn} className="underline">
                   retry

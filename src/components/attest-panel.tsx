@@ -29,7 +29,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
 
   if (!scored.score.complete || scored.gather.baseBlockNumber === null) {
     return (
-      <p className="text-sm text-warning">
+      <p className="text-sm text-warning-text">
         Attestation is disabled while any source is unavailable — an attested score must be
         computed from complete data.
       </p>
@@ -62,7 +62,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
     (auth !== null && auth.login.toLowerCase() === scored.githubHandle.toLowerCase())
   if (!handleVerified) {
     return (
-      <p className="text-sm text-warning">
+      <p className="text-sm text-warning-text">
         This score includes the GitHub handle @{scored.githubHandle}, which hasn&apos;t been
         verified. Sign in with GitHub on the form screen (Edit inputs) to prove it&apos;s yours
         before attesting.
@@ -139,7 +139,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
           </Button>
         )}
       </div>
-      {error && <p className="text-sm text-destructive break-all">{error}</p>}
+      {error && <p className="text-sm text-destructive-text break-all">{error}</p>}
       {attestationUid && (
         <FadeRise>
           <div className="flex flex-col gap-1">

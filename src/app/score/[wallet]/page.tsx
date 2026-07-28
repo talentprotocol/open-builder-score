@@ -221,7 +221,7 @@ export default function ResultsPage({
 
       {state.phase === 'error' && (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
-          <p className="text-base text-destructive">{state.message}</p>
+          <p className="text-base text-destructive-text">{state.message}</p>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setAttempt((a) => a + 1)}
@@ -250,7 +250,7 @@ export default function ResultsPage({
               />
               <span className="text-muted-foreground">/ {state.scored.score.maxTotal}</span>
               {!state.scored.score.complete && (
-                <span className="flex items-center gap-2 text-sm text-warning">
+                <span className="flex items-center gap-2 text-sm text-warning-text">
                   partial — some sources couldn&apos;t be checked
                   <button onClick={() => setAttempt((a) => a + 1)} className="underline">
                     try again

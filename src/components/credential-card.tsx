@@ -18,7 +18,7 @@ export function CredentialCard({ result }: { result: CredentialResult }) {
         </span>
       </div>
       {result.state === 'unavailable' ? (
-        <p className="text-sm text-warning">Couldn&apos;t check: {result.unavailableReason}</p>
+        <p className="text-sm text-warning-text">Couldn&apos;t check: {result.unavailableReason}</p>
       ) : result.rawValue === null ? (
         <p className="text-sm text-muted-foreground">Not earned</p>
       ) : (

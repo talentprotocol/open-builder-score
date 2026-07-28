@@ -189,7 +189,7 @@ function ScoreForm() {
       <Button type="submit" disabled={resolving} className="self-start">
         {resolving ? 'Resolving name…' : 'Compute score'}
       </Button>
-      {error && <p className="text-base text-destructive">{error}</p>}
+      {error && <p className="text-base text-destructive-text">{error}</p>}
     </form>
   )
 }

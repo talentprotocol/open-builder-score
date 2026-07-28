@@ -47,6 +47,8 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-destructive-text: var(--destructive-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -77,8 +79,12 @@
   --accent-foreground: theme(colors.gray.900);
   --destructive: theme(colors.red.500);
   --destructive-foreground: theme(colors.white);
+  /* destructive TEXT on light surfaces — red-500 is ~3.8:1 on gray-50 */
+  --destructive-text: theme(colors.red.700);
   --warning: theme(colors.amber.500);
   --warning-foreground: theme(colors.white);
+  /* warning TEXT on light surfaces — amber-500 is ~1.9:1 on gray-50 */
+  --warning-text: theme(colors.amber.700);
   --success: theme(colors.emerald.500);
   --success-foreground: theme(colors.white);
   /* success TEXT on light surfaces — emerald-500 is ~2.4:1 on gray-50 */
@@ -114,8 +120,10 @@
   --accent-foreground: theme(colors.neutral.50);
   --destructive: theme(colors.red.600);
   --destructive-foreground: theme(colors.neutral.50);
+  --destructive-text: var(--destructive);
   --warning: theme(colors.amber.500);
   --warning-foreground: theme(colors.neutral.50);
+  --warning-text: var(--warning);
   --success: theme(colors.emerald.500);
   --success-foreground: theme(colors.neutral.50);
   --success-text: var(--success);
