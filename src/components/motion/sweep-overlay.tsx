@@ -10,7 +10,7 @@ export function SweepOverlay() {
   return (
     <motion.div
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 h-20 border-b border-emerald-400/50 bg-gradient-to-b from-transparent to-emerald-400/10"
+      className="pointer-events-none absolute inset-x-0 h-20 border-b border-success/50 bg-gradient-to-b from-transparent to-success/10"
       initial={{ top: '-25%' }}
       animate={{ top: '110%' }}
       transition={{ duration: 2.6, ease: 'linear', repeat: Infinity }}
