@@ -55,56 +55,56 @@ function AttestationDetails({
   decoded: DecodedScoreAttestation
 }) {
   return (
-    <dl className="flex flex-col text-sm">
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Wallet</dt>
-        <dd className="break-all text-right font-mono text-xs">
+    <dl className="flex flex-col text-base">
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Wallet</dt>
+        <dd className="break-all text-right font-mono text-sm">
           <Link
             href={scorePath(decoded.wallet, decoded.githubHandle)}
-            className="text-emerald-400 underline"
+            className="text-success-text underline"
           >
             {decoded.wallet}
           </Link>
         </dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">GitHub handle</dt>
-        <dd className="break-all text-right font-mono text-xs">
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">GitHub handle</dt>
+        <dd className="break-all text-right font-mono text-sm">
           {decoded.githubHandle ? `@${decoded.githubHandle}` : '—'}
         </dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Spec version</dt>
-        <dd className="text-right font-mono text-xs">{decoded.specVersion}</dd>
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Spec version</dt>
+        <dd className="text-right font-mono text-sm">{decoded.specVersion}</dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Attested on</dt>
-        <dd className="text-right font-mono text-xs">
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Attested on</dt>
+        <dd className="text-right font-mono text-sm">
           {new Date(attestation.timeCreated * 1000).toISOString()}
         </dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Computed at</dt>
-        <dd className="text-right font-mono text-xs">
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Computed at</dt>
+        <dd className="text-right font-mono text-sm">
           {new Date(decoded.computedAt * 1000).toISOString()}
         </dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">As-of Base block</dt>
-        <dd className="text-right font-mono text-xs">{decoded.blockNumber.toString()}</dd>
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">As-of Base block</dt>
+        <dd className="text-right font-mono text-sm">{decoded.blockNumber.toString()}</dd>
       </div>
-      <div className="flex justify-between gap-4 border-b border-zinc-800 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Attester</dt>
-        <dd className="break-all text-right font-mono text-xs">{attestation.attester}</dd>
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Attester</dt>
+        <dd className="break-all text-right font-mono text-sm">{attestation.attester}</dd>
       </div>
       <div className="flex justify-between gap-4 py-1.5">
-        <dt className="shrink-0 text-zinc-500">Onchain record</dt>
-        <dd className="text-right text-xs">
+        <dt className="shrink-0 text-muted-foreground">Onchain record</dt>
+        <dd className="text-right text-sm">
           <a
             href={`${EASSCAN_SITE}/attestation/view/${attestation.uid}`}
             target="_blank"
             rel="noreferrer"
-            className="text-emerald-400 underline"
+            className="text-success-text underline"
           >
             View on easscan
           </a>
@@ -209,13 +209,13 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
       {state.phase === 'loading' && (
-        <div className="blueprint-grid relative overflow-hidden rounded-lg border border-zinc-800 p-6">
+        <div className="blueprint-grid relative overflow-hidden rounded-lg border bg-card/50 p-6">
           <SweepOverlay />
-          <p className="flex items-center gap-2.5 text-sm text-zinc-400">
+          <p className="flex items-center gap-2.5 text-base text-muted-foreground">
             <PingDot settled={false} /> {state.step}
           </p>
           {state.step.startsWith('Recomputing') && (
-            <ul className="mt-4 flex flex-col gap-2.5 text-sm">
+            <ul className="mt-4 flex flex-col gap-2.5 text-base">
               {(
                 [
                   ['chains', 'Onchain badges & balances (6 chains)'],
@@ -228,7 +228,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
                 return (
                   <li
                     key={source}
-                    className={`flex items-center gap-2.5 ${done ? 'text-emerald-400' : 'text-zinc-500'}`}
+                    className={`flex items-center gap-2.5 ${done ? 'text-success-text' : 'text-muted-foreground'}`}
                   >
                     <PingDot settled={done} /> {label}
                   </li>
@@ -240,14 +240,16 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
       )}
 
       {state.phase === 'invalid' && (
-        <div className="flex flex-col gap-3 rounded-lg border border-zinc-700 p-4">
-          <h1 className="text-sm font-medium text-red-400">Attestation could not be verified</h1>
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-zinc-300">
+        <div className="flex flex-col gap-3 rounded-lg border p-4">
+          <h1 className="text-base font-medium text-destructive-text">
+            Attestation could not be verified
+          </h1>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-base text-foreground">
             {state.problems.map((problem) => (
               <li key={problem}>{problem}</li>
             ))}
           </ul>
-          <Link href={verifyPath()} className="text-sm text-emerald-400 underline">
+          <Link href={verifyPath()} className="text-base text-muted-foreground underline hover:text-foreground">
             ← Verify another attestation
           </Link>
         </div>
@@ -256,23 +258,23 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
       {state.phase === 'not_comparable' && (
         <section className="flex flex-col gap-6">
           <FadeRise>
-            <div className="flex flex-col gap-1 rounded-lg border border-amber-700 bg-amber-950/40 p-4">
+            <div className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/10 p-4">
               {state.reason === 'revoked' ? (
                 <>
-                  <h1 className="text-sm font-medium text-amber-500">
+                  <h1 className="text-base font-medium text-warning-text">
                     This attestation was revoked.
                   </h1>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-sm text-muted-foreground">
                     It was an authentic Builder Score attestation, but it has since been revoked
                     onchain — treat it as withdrawn.
                   </p>
                 </>
               ) : (
                 <>
-                  <h1 className="text-sm font-medium text-amber-500">
+                  <h1 className="text-base font-medium text-warning-text">
                     Authentic attestation, different spec version.
                   </h1>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-sm text-muted-foreground">
                     It was computed with spec v{state.decoded.specVersion}; this app recomputes spec v
                     {spec.version}, so an exact comparison isn’t possible.
                   </p>
@@ -285,7 +287,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
             <AttestationDetails attestation={state.attestation} decoded={state.decoded} />
           </FadeRise>
 
-          <Link href={verifyPath()} className="text-sm text-emerald-400 underline">
+          <Link href={verifyPath()} className="text-base text-muted-foreground underline hover:text-foreground">
             ← Verify another attestation
           </Link>
         </section>
@@ -298,9 +300,9 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={SPRING}
-              className="rounded-lg border border-emerald-700 bg-emerald-950/40 p-4"
+              className="rounded-lg border border-success/30 bg-success/10 p-4"
             >
-              <h1 className="text-sm font-medium text-emerald-400">
+              <h1 className="text-base font-medium text-success-text">
                 ✓ Verified — recomputing today reproduces the attested score of{' '}
                 {state.decoded.score}.
               </h1>
@@ -308,11 +310,11 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
           )}
           {state.verdict === 'diverged' && (
             <FadeRise>
-              <div className="flex flex-col gap-1 rounded-lg border border-amber-700 bg-amber-950/40 p-4">
-                <h1 className="text-sm font-medium text-amber-500">
+              <div className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/10 p-4">
+                <h1 className="text-base font-medium text-warning-text">
                   Attested {state.decoded.score}, recomputed {state.recomputed.total} today.
                 </h1>
-                <p className="text-xs text-zinc-400">
+                <p className="text-sm text-muted-foreground">
                   Scores drift as public data changes. A divergence doesn’t mean the attestation was
                   wrong when it was made — it means the data has moved since.
                 </p>
@@ -321,11 +323,11 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
           )}
           {state.verdict === 'incomplete' && (
             <FadeRise>
-              <div className="flex flex-col gap-1 rounded-lg border border-amber-700 bg-amber-950/40 p-4">
-                <h1 className="text-sm font-medium text-amber-500">
+              <div className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/10 p-4">
+                <h1 className="text-base font-medium text-warning-text">
                   Comparison incomplete — some sources couldn’t be checked.
                 </h1>
-                <p className="text-xs text-zinc-400">
+                <p className="text-sm text-muted-foreground">
                   Attested {state.decoded.score}; the partial recompute reached{' '}
                   {state.recomputed.total}. Try again in a moment for a full comparison.
                 </p>
@@ -339,7 +341,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
           <FadeRise delay={0.15}>
             <div className="flex flex-col gap-3">
-              <h2 className="text-sm font-medium text-zinc-400">Recomputed breakdown</h2>
+              <h2 className="text-base font-medium text-muted-foreground">Recomputed breakdown</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {state.recomputed.perCredential.map((result) => (
                   <CredentialCard key={result.slug} result={result} />
