@@ -25,6 +25,7 @@ export function ThemeToggle() {
       size="icon"
       className="text-muted-foreground"
       aria-label="Toggle theme"
+      disabled={!mounted}
       onClick={() => {
         if (mounted) setTheme(next)
       }}
