@@ -26,14 +26,14 @@ export function HeroScan() {
   return (
     <div
       aria-hidden
-      className="blueprint-grid relative w-full max-w-xs shrink-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/60 p-5 font-mono"
+      className="blueprint-grid relative w-full max-w-xs shrink-0 overflow-hidden rounded-lg border bg-card/50 p-5 font-mono shadow-xs"
     >
       <SweepOverlay />
-      <ul className="flex flex-col gap-2.5 text-xs">
+      <ul className="flex flex-col gap-2.5 text-sm">
         {ROWS.map((row, i) => (
           <li
             key={row}
-            className={`flex items-center gap-2 ${effective > i ? 'text-emerald-400' : 'text-zinc-600'}`}
+            className={`flex items-center gap-2 ${effective > i ? 'text-success' : 'text-muted-foreground/70'}`}
           >
             <PingDot settled={effective > i} />
             {row}
@@ -43,11 +43,11 @@ export function HeroScan() {
       <div className="mt-4 flex h-9 items-baseline gap-1.5">
         {effective >= 5 ? (
           <>
-            <ScoreCountUp value={141} className="text-3xl font-bold text-zinc-50" />
-            <span className="text-xs text-zinc-600">/ 257</span>
+            <ScoreCountUp value={141} className="text-xl font-bold text-foreground" />
+            <span className="text-sm text-muted-foreground/70">/ 257</span>
           </>
         ) : (
-          <span className="text-[10px] tracking-[0.18em] text-emerald-400/70">SCANNING…</span>
+          <span className="text-xs tracking-[0.18em] text-success/70">SCANNING…</span>
         )}
       </div>
     </div>

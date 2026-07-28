@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useAccount } from 'wagmi'
 import { inputPath } from '@/lib/routes'
+import { Button } from '@/components/ui/button'
 
 export function LandingCta() {
   const router = useRouter()
@@ -41,13 +42,11 @@ export function LandingCta() {
 
   return (
     <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-      <button
-        onClick={handleClick}
-        className="rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium transition-shadow hover:bg-emerald-500 hover:shadow-[0_0_24px_rgba(16,185,129,0.35)]"
+      <Button onClick={handleClick}>Check your score</Button>
+      <Link
+        href={inputPath()}
+        className="text-base text-muted-foreground underline transition-colors hover:text-foreground"
       >
-        Check your score
-      </button>
-      <Link href={inputPath()} className="text-sm text-zinc-400 underline">
         or check any address
       </Link>
     </div>
