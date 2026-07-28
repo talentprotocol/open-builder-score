@@ -3,8 +3,10 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'motion/react'
+import { XIcon } from '@phosphor-icons/react/dist/ssr'
 import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
+import { Button } from '@/components/ui/button'
 import { scorePath } from '@/lib/routes'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { GithubSignIn } from '@/components/github-sign-in'
@@ -95,7 +97,7 @@ function ScoreForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="wallet" className="text-xs font-medium text-zinc-400">
+        <label htmlFor="wallet" className="text-sm font-medium text-muted-foreground">
           Wallet address or ENS name
         </label>
         <input
@@ -106,7 +108,7 @@ function ScoreForm() {
             setAddressInput(e.target.value)
           }}
           placeholder="0x… or name.eth"
-          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-base transition-shadow focus:outline-none focus:ring-1 focus:ring-success/60 focus:shadow-[0_0_18px_var(--signal-glow)]"
           spellCheck={false}
         />
       </div>
@@ -121,7 +123,10 @@ function ScoreForm() {
             className="overflow-hidden"
           >
             <div className="flex flex-col gap-1.5 pb-0.5">
-              <label htmlFor={`wallet-${i + 2}`} className="text-xs font-medium text-zinc-400">
+              <label
+                htmlFor={`wallet-${i + 2}`}
+                className="text-sm font-medium text-muted-foreground"
+              >
                 Wallet {i + 2}
               </label>
               <div className="flex gap-2">
@@ -134,16 +139,16 @@ function ScoreForm() {
                     )
                   }
                   placeholder="0x… or name.eth"
-                  className="flex-1 rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
+                  className="flex-1 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-base transition-shadow focus:outline-none focus:ring-1 focus:ring-success/60 focus:shadow-[0_0_18px_var(--signal-glow)]"
                   spellCheck={false}
                 />
                 <button
                   type="button"
                   aria-label={`Remove wallet ${i + 2}`}
                   onClick={() => setExtraInputs((prev) => prev.filter((r) => r.id !== row.id))}
-                  className="rounded-md border border-zinc-700 px-3 text-sm text-zinc-400"
+                  className="rounded-md border border-border px-3 text-base text-muted-foreground transition-colors hover:bg-accent"
                 >
-                  ✕
+                  <XIcon className="size-4" />
                 </button>
               </div>
             </div>
@@ -154,14 +159,14 @@ function ScoreForm() {
         <button
           type="button"
           onClick={() => setExtraInputs((prev) => [...prev, { id: nextRowId.current++, value: '' }])}
-          className="self-start text-xs text-zinc-400 underline"
+          className="self-start text-sm text-muted-foreground underline transition-colors hover:text-foreground"
         >
           + Add another wallet
         </button>
       )}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="github" className="text-xs font-medium text-zinc-400">
-          GitHub handle <span className="font-normal text-zinc-600">(optional)</span>
+        <label htmlFor="github" className="text-sm font-medium text-muted-foreground">
+          GitHub handle <span className="font-normal text-muted-foreground/70">(optional)</span>
         </label>
         <input
           id="github"
@@ -171,7 +176,7 @@ function ScoreForm() {
             setGithubInput(e.target.value)
           }}
           placeholder="octocat"
-          className="rounded-md border border-zinc-700 bg-transparent px-3 py-2 font-mono text-sm transition-shadow focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:shadow-[0_0_18px_rgba(16,185,129,0.15)]"
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-base transition-shadow focus:outline-none focus:ring-1 focus:ring-success/60 focus:shadow-[0_0_18px_var(--signal-glow)]"
           spellCheck={false}
         />
       </div>
@@ -181,14 +186,10 @@ function ScoreForm() {
           setGithubInput(login)
         }}
       />
-      <button
-        type="submit"
-        disabled={resolving}
-        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
-      >
+      <Button type="submit" disabled={resolving} className="self-start">
         {resolving ? 'Resolving name…' : 'Compute score'}
-      </button>
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      </Button>
+      {error && <p className="text-base text-destructive">{error}</p>}
     </form>
   )
 }
@@ -198,8 +199,8 @@ export default function ScorePage() {
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col">
       <FadeRise className="flex flex-col gap-8">
         <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold">Check a Builder Score</h1>
-          <p className="text-sm text-zinc-400">
+          <h1 className="font-heading text-xl font-normal">Check a Builder Score</h1>
+          <p className="text-base text-muted-foreground">
             Enter any wallet or ENS name — add up to 4 more to aggregate one score across them.
             Scoring runs entirely in your browser — connecting a wallet is only needed to attest.
           </p>

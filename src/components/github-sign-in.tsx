@@ -9,6 +9,7 @@ import {
 } from '@/lib/github-auth'
 import { clearGithubAuth, setGithubAuth } from '@/lib/github-auth-store'
 import { useGithubAuth } from '@/components/use-github-auth'
+import { Badge } from '@/components/ui/badge'
 
 type UiState =
   | { step: 'idle' }
@@ -80,14 +81,16 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
         transition={{ duration: 0.18 }}
       >
         {auth ? (
-          <p className="flex items-center gap-2 text-xs text-zinc-400">
-            <span className="text-emerald-400">✓ Signed in as @{auth.login}</span>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="success" className="text-sm">
+              ✓ Signed in as @{auth.login}
+            </Badge>
             <button onClick={() => clearGithubAuth()} className="underline">
               Sign out
             </button>
           </p>
         ) : (
-          <div className="flex flex-col gap-1 text-xs text-zinc-400">
+          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             {ui.step === 'idle' && (
               <button onClick={handleSignIn} className="self-start underline">
                 Sign in with GitHub to verify your handle
@@ -97,12 +100,12 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
             {ui.step === 'code' && (
               <p>
                 Enter code{' '}
-                <span className="font-mono font-semibold text-zinc-200">{ui.userCode}</span> at{' '}
+                <span className="font-mono font-semibold text-foreground">{ui.userCode}</span> at{' '}
                 <a
                   href={ui.verificationUri}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-400 underline"
+                  className="text-success-text underline"
                 >
                   github.com/login/device
                 </a>{' '}
@@ -113,7 +116,7 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
               </p>
             )}
             {ui.step === 'error' && (
-              <p className="text-red-400">
+              <p className="text-destructive">
                 {ui.message}{' '}
                 <button onClick={handleSignIn} className="underline">
                   retry
