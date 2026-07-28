@@ -1,6 +1,6 @@
-# the-final-app — Open Builder Score (POC)
+# Open Builder Score
 
-A self-scoring page: anyone enters a wallet (+ optionally a GitHub handle) and gets a
+An open score anyone can compute: enter a wallet (+ optionally a GitHub handle) and get a
 Builder Score computed **entirely in the browser** from public data — badges and token
 holdings via RPC, GitHub via its public API — with an optional one-click EAS attestation
 on Base. No backend, no database of people, no accounts.
