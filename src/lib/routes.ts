@@ -34,3 +34,7 @@ export function inputPath(
 export function verifyPath(uid: string | null = null): string {
   return uid ? `/verify/${uid}` : '/verify'
 }
+
+export function credentialsPath(slug: string | null = null): string {
+  return slug ? `/credentials#${slug}` : '/credentials'
+}

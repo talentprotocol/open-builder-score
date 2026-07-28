@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePath, inputPath, verifyPath } from '@/lib/routes'
+import { scorePath, inputPath, verifyPath, credentialsPath } from '@/lib/routes'
 
 const WALLET = '0x33041027dd8F4dC82B6e825FB37ADf8f15d44053'
 
@@ -76,5 +76,15 @@ describe('extra wallets', () => {
     expect(inputPath('0xabc', null, ['0xdef', '0x123'])).toBe(
       '/score?wallet=0xabc&wallets=0xdef%2C0x123',
     )
+  })
+})
+
+describe('credentialsPath', () => {
+  it('returns the bare page path', () => {
+    expect(credentialsPath()).toBe('/credentials')
+  })
+
+  it('appends a slug anchor for deep links', () => {
+    expect(credentialsPath('github_forks')).toBe('/credentials#github_forks')
   })
 })
