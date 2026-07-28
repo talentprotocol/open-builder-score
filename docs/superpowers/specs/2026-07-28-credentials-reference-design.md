@@ -7,7 +7,7 @@
 ## Decisions (locked)
 
 1. **Reference page only.** No propose-change affordance, no public repo/spec home in v1 (the GitHub repo is private; where the spec's public home lives is a separate governance decision). Community iteration happens by sharing links.
-2. **Active credentials only.** The 20 `poc: true` credentials that produce the 257-point total. Deferred (`poc: false`) credentials do not appear.
+2. **Active credentials only.** The 21 `poc: true` credentials that produce the 257-point total. Deferred (`poc: false`) credentials do not appear.
 3. **Shape A:** one `/credentials` route, grouped by data source, with `#slug` anchors per credential. No per-credential routes, no dense table.
 
 ## 1. Data helper — `src/lib/credential-reference.ts`
@@ -34,7 +34,7 @@ Pure module, derives everything from `spec/spec.json` (the same file the engine 
 Static server component (no client hooks; motion via existing shared components only).
 
 - **Metadata:** title "Builder Score credentials — Open Builder Score"; description "Every credential in the open Builder Score: what it measures, the exact formula, and the points it can earn — 257 max."
-- **Header:** Cal Sans h1 ("Credentials", `font-heading text-xl font-normal` — the subpage h1 idiom), subtitle in `text-base text-muted-foreground`: "Every point in a Builder Score comes from one of these 20 credentials — 257 max points, same inputs, same score, for anyone." The 20 and 257 are computed from the helper, not hardcoded (drift guard in copy too: `groups.flatMap(g => g.credentials).length` and sum of `maxTotal`).
+- **Header:** Cal Sans h1 ("Credentials", `font-heading text-xl font-normal` — the subpage h1 idiom), subtitle in `text-base text-muted-foreground`: "Every point in a Builder Score comes from one of these 21 credentials — 257 max points, same inputs, same score, for anyone." The 21 and 257 are computed from the helper, not hardcoded (drift guard in copy too: `groups.flatMap(g => g.credentials).length` and sum of `maxTotal`).
 - **Groups:** each source group is a section headed by `<PingDot settled />` + the group label as a tracked-uppercase mono caption (`font-mono text-xs tracking-[0.18em] text-muted-foreground uppercase`) with the group's max points right-aligned in the same caption style. Sections wrapped in `FadeRise whileInView` (landing-section idiom).
 - **Credential cards:** 2-col grid (`grid grid-cols-1 gap-3 sm:grid-cols-2`). Card = the neutral results-card shell: `rounded-lg border bg-card p-4 shadow-xs dark:bg-card/50 flex flex-col gap-1`. Content:
   - name (`text-base font-medium`) + `{max_score} pts` (`font-mono text-base tabular-nums tracking-tighter`) in a baseline row

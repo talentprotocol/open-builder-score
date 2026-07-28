@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A static, shareable `/credentials` page listing the 20 active credentials with their exact scoring math, grouped by scan source, with per-credential deep links — derived from the same `spec.json` the engine scores with.
+**Goal:** A static, shareable `/credentials` page listing the 21 active credentials with their exact scoring math, grouped by scan source, with per-credential deep links — derived from the same `spec.json` the engine scores with.
 
 **Architecture:** A pure helper (`src/lib/credential-reference.ts`) turns `spec.json` into grouped display data with engine-notation formulas; a static server page renders it with existing motion/brand primitives (FadeRise, PingDot, Badge); three links (footer, landing card, results page) point at it via a new `credentialsPath` route builder.
 
