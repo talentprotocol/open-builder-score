@@ -12,6 +12,7 @@ import { WagmiProvider } from 'wagmi'
 import { MotionConfig } from 'motion/react'
 import { ThemeProvider as NextThemesProvider, useTheme } from 'next-themes'
 import { base, baseSepolia } from 'wagmi/chains'
+import { useMounted } from '@/components/use-mounted'
 import { WALLETCONNECT_PROJECT_ID } from '@/lib/wallet'
 
 const config = getDefaultConfig({
@@ -37,10 +38,14 @@ const RAINBOWKIT_DARK = darkTheme({
 })
 
 function RainbowKitThemed({ children }: { children: React.ReactNode }) {
-  // undefined on the server and first client render → dark, matching defaultTheme.
+  // Dark on the server and through the hydration render, matching defaultTheme —
+  // a stored light theme would otherwise mismatch RainbowKit's injected style tag.
   const { resolvedTheme } = useTheme()
+  const mounted = useMounted()
   return (
-    <RainbowKitProvider theme={resolvedTheme === 'light' ? RAINBOWKIT_LIGHT : RAINBOWKIT_DARK}>
+    <RainbowKitProvider
+      theme={mounted && resolvedTheme === 'light' ? RAINBOWKIT_LIGHT : RAINBOWKIT_DARK}
+    >
       {children}
     </RainbowKitProvider>
   )
