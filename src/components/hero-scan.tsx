@@ -33,7 +33,7 @@ export function HeroScan() {
         {ROWS.map((row, i) => (
           <li
             key={row}
-            className={`flex items-center gap-2 ${effective > i ? 'text-success' : 'text-muted-foreground/70'}`}
+            className={`flex items-center gap-2 ${effective > i ? 'text-success-text' : 'text-muted-foreground/70'}`}
           >
             <PingDot settled={effective > i} />
             {row}
@@ -47,7 +47,7 @@ export function HeroScan() {
             <span className="text-sm text-muted-foreground/70">/ 257</span>
           </>
         ) : (
-          <span className="text-xs tracking-[0.18em] text-success/70">SCANNING…</span>
+          <span className="text-xs tracking-[0.18em] text-success-text/70">SCANNING…</span>
         )}
       </div>
     </div>

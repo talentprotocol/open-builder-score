@@ -46,6 +46,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-text: var(--success-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -80,6 +81,8 @@
   --warning-foreground: theme(colors.white);
   --success: theme(colors.emerald.500);
   --success-foreground: theme(colors.white);
+  /* success TEXT on light surfaces — emerald-500 is ~2.4:1 on gray-50 */
+  --success-text: theme(colors.emerald.700);
   --border: theme(colors.gray.200);
   --input: theme(colors.gray.200);
   --ring: theme(colors.gray.400);
@@ -115,6 +118,7 @@
   --warning-foreground: theme(colors.neutral.50);
   --success: theme(colors.emerald.500);
   --success-foreground: theme(colors.neutral.50);
+  --success-text: var(--success);
   --border: theme(colors.neutral.800);
   --input: theme(colors.neutral.800);
   --ring: theme(colors.neutral.600);
@@ -138,6 +142,8 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
   }
 
   a,
