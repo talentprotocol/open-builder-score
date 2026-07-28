@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { credentialsPath } from '@/lib/routes'
 import { LandingCta } from '@/components/landing-cta'
 import { HeroScan } from '@/components/hero-scan'
 import { FadeRise } from '@/components/motion/fade-rise'
@@ -9,7 +11,7 @@ export const metadata: Metadata = {
     'An open Builder Score anyone can compute in their browser from public onchain and GitHub data — with the exact math behind every point, attestable on Base.',
 }
 
-const VALUE_PROPS = [
+const VALUE_PROPS: { title: string; body: string; link?: { href: string; label: string } }[] = [
   {
     title: 'Computed in your browser',
     body: 'Public RPC and public APIs only — no accounts, and nothing leaves your machine except the queries themselves.',
@@ -21,6 +23,7 @@ const VALUE_PROPS = [
   {
     title: 'Anyone can run it',
     body: 'Open spec, open math. The same inputs always produce the same score.',
+    link: { href: credentialsPath(), label: 'See every credential →' },
   },
 ]
 
@@ -54,6 +57,16 @@ export default function Landing() {
             <div key={prop.title} className="rounded-lg border bg-card p-4 shadow-xs dark:bg-card/50">
               <h2 className="text-base font-medium">{prop.title}</h2>
               <p className="mt-2 text-sm text-muted-foreground">{prop.body}</p>
+              {prop.link && (
+                <p className="mt-2 text-sm">
+                  <Link
+                    href={prop.link.href}
+                    className="text-muted-foreground underline transition-colors hover:text-foreground"
+                  >
+                    {prop.link.label}
+                  </Link>
+                </p>
+              )}
             </div>
           ))}
         </section>

@@ -12,7 +12,7 @@ import { readGithubCredentials } from '@/lib/github'
 import { authorizedFetch } from '@/lib/github-auth'
 import { useGithubAuth } from '@/components/use-github-auth'
 import type { Spec } from '@/lib/types'
-import { inputPath, scorePath } from '@/lib/routes'
+import { credentialsPath, inputPath, scorePath } from '@/lib/routes'
 import { CredentialCard } from '@/components/credential-card'
 import { AttestPanel } from '@/components/attest-panel'
 import { AttestationHistory } from '@/components/attestation-history'
@@ -308,6 +308,17 @@ export default function ResultsPage({
               </StaggerItem>
             ))}
           </Stagger>
+
+          <FadeRise delay={0.12}>
+            <p>
+              <Link
+                href={credentialsPath()}
+                className="text-sm text-muted-foreground underline transition-colors hover:text-foreground"
+              >
+                Full credential reference →
+              </Link>
+            </p>
+          </FadeRise>
 
           <FadeRise delay={0.15}>
           <p className="text-sm text-muted-foreground/70">

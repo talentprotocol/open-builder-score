@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@phosphor-icons/react/dist/ssr'
 import { ATTEST_SCHEMA_UID, EASSCAN_SITE } from '@/lib/eas'
-import { verifyPath } from '@/lib/routes'
+import { credentialsPath, verifyPath } from '@/lib/routes'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -18,6 +18,12 @@ export function Footer() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <Link
+            href={credentialsPath()}
+            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            Credentials
+          </Link>
           <Link
             href={verifyPath()}
             className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
