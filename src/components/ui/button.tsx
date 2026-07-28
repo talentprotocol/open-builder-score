@@ -8,7 +8,7 @@ const variants = {
   secondary: 'border-border bg-accent/40 hover:bg-accent hover:border-foreground/20',
   ghost: 'border-transparent hover:bg-accent hover:text-accent-foreground',
   'success-secondary':
-    'border-success/30 bg-success/10 text-success hover:bg-success/20 hover:border-success/50',
+    'border-success/30 bg-success/10 text-success-text hover:bg-success/20 hover:border-success/50',
 } as const
 
 const sizes = {
