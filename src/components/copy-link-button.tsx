@@ -21,7 +21,7 @@ export function CopyLinkButton() {
       onClick={handleCopy}
       animate={copied ? { scale: [1, 1.08, 1] } : {}}
       transition={{ duration: 0.3 }}
-      className="text-sm text-zinc-400 underline"
+      className="text-base text-muted-foreground underline transition-colors hover:text-foreground"
     >
       {copied ? 'Copied!' : 'Copy link'}
     </motion.button>

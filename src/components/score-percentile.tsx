@@ -24,7 +24,7 @@ export function ScorePercentile({ score }: { score: number }) {
   if (percentile === null) return null
   return (
     <FadeRise>
-      <p className="text-xs text-zinc-500">
+      <p className="text-sm text-muted-foreground">
         Higher than {percentile.countBelow} of {percentile.corpusSize} attested Builder{' '}
         {percentile.corpusSize === 1 ? 'Score' : 'Scores'} · top {percentile.topPercent}%
         {percentile.truncated && ' · based on the most recent 500'}

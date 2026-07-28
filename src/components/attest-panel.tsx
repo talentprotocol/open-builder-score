@@ -9,6 +9,7 @@ import { scorePath, verifyPath } from '@/lib/routes'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { PingDot } from '@/components/motion/ping-dot'
 import { FadeRise } from '@/components/motion/fade-rise'
+import { Button } from '@/components/ui/button'
 import specJson from '../../spec/spec.json'
 import type { Spec } from '@/lib/types'
 import type { Scored } from '@/lib/orchestrate'
@@ -28,7 +29,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
 
   if (!scored.score.complete || scored.gather.baseBlockNumber === null) {
     return (
-      <p className="text-xs text-amber-500">
+      <p className="text-sm text-warning">
         Attestation is disabled while any source is unavailable — an attested score must be
         computed from complete data.
       </p>
@@ -39,13 +40,13 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   // would make recompute-and-verify diverge by construction.
   if (scored.extraAddresses.length > 0) {
     return (
-      <p className="text-xs text-zinc-500">
+      <p className="text-sm text-muted-foreground">
         This is an aggregate across {scored.extraAddresses.length + 1}{' '}
         wallets, and the attestation schema anchors exactly one wallet — so
         aggregate scores can&apos;t be attested.{' '}
         <Link
           href={scorePath(scored.address, scored.githubHandle)}
-          className="text-emerald-400 underline"
+          className="text-success-text underline"
         >
           Score the primary wallet alone
         </Link>{' '}
@@ -61,7 +62,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
     (auth !== null && auth.login.toLowerCase() === scored.githubHandle.toLowerCase())
   if (!handleVerified) {
     return (
-      <p className="text-xs text-amber-500">
+      <p className="text-sm text-warning">
         This score includes the GitHub handle @{scored.githubHandle}, which hasn&apos;t been
         verified. Sign in with GitHub on the form screen (Edit inputs) to prove it&apos;s yours
         before attesting.
@@ -107,20 +108,16 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-zinc-700 p-4">
-      <h2 className="text-sm font-medium">Attest this score onchain</h2>
-      <p className="text-xs text-zinc-500">
+    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs dark:bg-card/50">
+      <h2 className="text-base font-medium">Attest this score onchain</h2>
+      <p className="text-sm text-muted-foreground">
         You sign, you pay. The attestation embeds the spec version, score, and the as-of anchor
         so anyone can recompute and verify it.
       </p>
       <div className="flex items-center gap-3">
         <ConnectButton showBalance={false} />
         {connected && chainId !== ATTEST_CHAIN_ID && (
-          <button
-            onClick={handleSwitch}
-            disabled={busy}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
+          <Button onClick={handleSwitch} disabled={busy}>
             {busy ? (
               <span className="flex items-center gap-2">
                 <PingDot settled={false} /> Switching…
@@ -128,14 +125,10 @@ export function AttestPanel({ scored }: { scored: Scored }) {
             ) : (
               'Switch to Base Sepolia'
             )}
-          </button>
+          </Button>
         )}
         {connected && chainId === ATTEST_CHAIN_ID && (
-          <button
-            onClick={handleAttest}
-            disabled={busy || !walletClient}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
+          <Button onClick={handleAttest} disabled={busy || !walletClient}>
             {busy ? (
               <span className="flex items-center gap-2">
                 <PingDot settled={false} /> Waiting for wallet…
@@ -143,10 +136,10 @@ export function AttestPanel({ scored }: { scored: Scored }) {
             ) : (
               'Attest onchain'
             )}
-          </button>
+          </Button>
         )}
       </div>
-      {error && <p className="text-xs text-red-400 break-all">{error}</p>}
+      {error && <p className="text-sm text-destructive break-all">{error}</p>}
       {attestationUid && (
         <FadeRise>
           <div className="flex flex-col gap-1">
@@ -154,13 +147,13 @@ export function AttestPanel({ scored }: { scored: Scored }) {
               href={`${EXPLORER_BASE}${attestationUid}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-emerald-400 underline break-all"
+              className="text-sm text-success-text underline break-all"
             >
               Attested — view {attestationUid} on easscan
             </a>
             <Link
               href={verifyPath(attestationUid)}
-              className="text-xs text-emerald-400 underline"
+              className="text-sm text-success-text underline"
             >
               Verify it here
             </Link>

@@ -189,21 +189,21 @@ export default function ResultsPage({
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col gap-8">
       {state.phase === 'resolving' && (
-        <p className="flex items-center gap-2.5 text-sm text-zinc-400">
+        <p className="flex items-center gap-2.5 text-base text-muted-foreground">
           <PingDot settled={false} /> Resolving ENS name…
         </p>
       )}
 
       {state.phase === 'loading' && (
-        <div className="blueprint-grid relative overflow-hidden rounded-lg border border-zinc-800 p-6">
+        <div className="blueprint-grid relative overflow-hidden rounded-lg border bg-card/50 p-6">
           <SweepOverlay />
-          <ul className="flex flex-col gap-3 text-sm">
+          <ul className="flex flex-col gap-3 text-base">
             {SOURCES.map((source) => {
               const done = state.settled.includes(source)
               return (
                 <li
                   key={source}
-                  className={`flex items-center gap-2.5 ${done ? 'text-emerald-400' : 'text-zinc-500'}`}
+                  className={`flex items-center gap-2.5 ${done ? 'text-success-text' : 'text-muted-foreground'}`}
                 >
                   <PingDot settled={done} />
                   {source === 'chains' && extrasRaw.length > 0
@@ -213,23 +213,23 @@ export default function ResultsPage({
               )
             })}
           </ul>
-          <p className="mt-5 font-mono text-[10px] tracking-[0.18em] text-emerald-400/80">
+          <p className="mt-5 font-mono text-xs tracking-[0.18em] text-success-text/80">
             SCANNING SOURCES
           </p>
         </div>
       )}
 
       {state.phase === 'error' && (
-        <div className="flex flex-col gap-3 rounded-lg border border-zinc-700 p-4">
-          <p className="text-sm text-red-400">{state.message}</p>
+        <div className="flex flex-col gap-3 rounded-lg border p-4">
+          <p className="text-base text-destructive">{state.message}</p>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setAttempt((a) => a + 1)}
-              className="text-sm text-emerald-400 underline"
+              className="text-base text-muted-foreground underline hover:text-foreground"
             >
               Try again
             </button>
-            <Link href={inputPath()} className="text-sm text-zinc-400 underline">
+            <Link href={inputPath()} className="text-base text-muted-foreground underline">
               ← Back to the form
             </Link>
           </div>
@@ -238,16 +238,19 @@ export default function ResultsPage({
 
       {state.phase === 'done' && (
         <section className="flex flex-col gap-6">
-          <p className="font-mono text-[10px] tracking-[0.18em] text-zinc-600">
+          <p className="font-mono text-xs tracking-[0.18em] text-muted-foreground/70">
             COMPUTED IN YOUR BROWSER
           </p>
           <FadeRise>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-baseline gap-3">
-              <ScoreCountUp value={state.scored.score.total} className="text-5xl font-bold" />
-              <span className="text-zinc-500">/ {state.scored.score.maxTotal}</span>
+              <ScoreCountUp
+                value={state.scored.score.total}
+                className="font-mono text-3xl leading-none tracking-tighter font-bold"
+              />
+              <span className="text-muted-foreground">/ {state.scored.score.maxTotal}</span>
               {!state.scored.score.complete && (
-                <span className="flex items-center gap-2 text-xs text-amber-500">
+                <span className="flex items-center gap-2 text-sm text-warning">
                   partial — some sources couldn&apos;t be checked
                   <button onClick={() => setAttempt((a) => a + 1)} className="underline">
                     try again
@@ -259,7 +262,7 @@ export default function ResultsPage({
               <CopyLinkButton />
               <Link
                 href={inputPath(state.scored.address, state.scored.githubHandle, state.scored.extraAddresses)}
-                className="text-sm text-zinc-400 underline"
+                className="text-base text-muted-foreground underline hover:text-foreground"
               >
                 Edit inputs
               </Link>
@@ -269,16 +272,16 @@ export default function ResultsPage({
 
           <FadeRise delay={0.08}>
           <div className="flex flex-col gap-0.5">
-            <p className="break-all font-mono text-xs text-zinc-500">
+            <p className="break-all font-mono text-sm text-muted-foreground">
               {state.scored.address}
               {state.scored.githubHandle && ` · @${state.scored.githubHandle}`}
               {state.scored.githubHandle &&
                 auth?.login.toLowerCase() === state.scored.githubHandle.toLowerCase() && (
-                  <span className="text-emerald-400"> · verified</span>
+                  <span className="text-success-text"> · verified</span>
                 )}
             </p>
             {state.scored.extraAddresses.map((a) => (
-              <p key={a} className="break-all font-mono text-xs text-zinc-500">
+              <p key={a} className="break-all font-mono text-sm text-muted-foreground">
                 + {a}
               </p>
             ))}
@@ -290,29 +293,24 @@ export default function ResultsPage({
           <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {state.scored.score.perCredential.map((result) => (
               <StaggerItem key={result.slug}>
-                <motion.div
-                  className="rounded-lg"
-                  initial={false}
-                  animate={
-                    result.state === 'earned'
-                      ? {
-                          boxShadow: [
-                            '0 0 0 1px rgba(52, 211, 153, 0.55)',
-                            '0 0 0 1px rgba(52, 211, 153, 0)',
-                          ],
-                        }
-                      : {}
-                  }
-                  transition={{ duration: 1.2, delay: 0.5, ease: 'easeOut' }}
-                >
+                <div className="relative rounded-lg">
+                  {result.state === 'earned' && (
+                    <motion.span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-lg shadow-[0_0_0_1px_var(--signal-flash)]"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: [1, 0] }}
+                      transition={{ duration: 1.2, delay: 0.5, ease: 'easeOut' }}
+                    />
+                  )}
                   <CredentialCard result={result} />
-                </motion.div>
+                </div>
               </StaggerItem>
             ))}
           </Stagger>
 
           <FadeRise delay={0.15}>
-          <p className="text-xs text-zinc-600">
+          <p className="text-sm text-muted-foreground/70">
             github_repositories approximates production (public repo count vs. repos
             contributed-to). Computed at{' '}
             {new Date(state.scored.gather.inputs.computedAt * 1000).toISOString()}

@@ -24,19 +24,24 @@ export function AttestationHistory({ wallet }: { wallet: `0x${string}` }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-zinc-400">Attestation history</h2>
-      <ul className="flex flex-col text-sm">
+      <h2 className="text-base font-medium text-muted-foreground">Attestation history</h2>
+      <ul className="flex flex-col text-base">
         {attestations.map((a) => (
           <li
             key={a.uid}
-            className="flex items-center justify-between gap-4 border-b border-zinc-800 py-1.5 last:border-b-0"
+            className="flex items-center justify-between gap-4 border-b border-border py-1.5 last:border-b-0"
           >
-            <span className={a.revoked ? 'text-zinc-600 line-through' : 'text-zinc-300'}>
+            <span
+              className={a.revoked ? 'text-muted-foreground/60 line-through' : 'text-foreground'}
+            >
               {a.score} pts · spec v{a.specVersion} ·{' '}
               {new Date(a.timeCreated * 1000).toISOString().slice(0, 10)}
               {a.revoked && ' · revoked'}
             </span>
-            <Link href={verifyPath(a.uid)} className="shrink-0 text-xs text-emerald-400 underline">
+            <Link
+              href={verifyPath(a.uid)}
+              className="shrink-0 text-sm text-success-text underline"
+            >
               Verify →
             </Link>
           </li>
