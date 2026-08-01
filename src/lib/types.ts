@@ -64,3 +64,71 @@ export interface ScoreResult {
   perCredential: CredentialResult[]
   complete: boolean            // false if ANY credential is 'unavailable' — gates attestation
 }
+
+// --- Badges -----------------------------------------------------------------
+// Zero-point achievements. They live alongside the score, never inside it:
+// nothing here feeds computeScore, ScoreResult.complete, or the attestation.
+
+// 'rpc'       — read live from a contract, per wallet
+// 'allowlist' — membership in a frozen set derived from public chain history,
+//               for contracts that cannot answer the question per wallet
+// 'snapshot'  — membership in a dated export from Talent Protocol's database
+//
+// A badge may carry more than one check: `source` names its primary one, and
+// `snapshot: true` adds a snapshot on top. Checks are OR-ed, so a badge earned
+// by any one of them is earned.
+export type BadgeSource = 'rpc' | 'allowlist' | 'snapshot'
+export type BadgeCheck = BadgeSource
+export type BadgeMethod = 'nonzero_address_call' | 'positive_uint_call'
+
+export interface BadgeContract { name: string; chain: string; address: string }
+export interface BadgeDefinition {
+  slug: string
+  name: string
+  description: string
+  source: BadgeSource
+  method?: BadgeMethod
+  call?: string
+  contracts?: BadgeContract[]
+  allowlist?: string
+  snapshot?: boolean
+  notes?: string
+}
+
+export interface Allowlist {
+  slug: string
+  source: string
+  generator: string
+  frozen_because: string
+  chains: Record<string, { factory: string; events: number }>
+  count: number
+  talents: string[]
+}
+export interface BadgeSpec {
+  version: string
+  badges: BadgeDefinition[]
+}
+
+// Per-wallet outcome, before the OR across wallets.
+export type BadgeInput =
+  | { status: 'ok'; earned: boolean }
+  | { status: 'unavailable'; reason: string }
+
+export type BadgeState = 'earned' | 'not_earned' | 'unavailable'
+
+export interface BadgeResult {
+  slug: string
+  name: string
+  description: string
+  source: BadgeSource
+  state: BadgeState
+  unavailableReason?: string
+  asOf?: string | null          // snapshot badges only — the export date
+}
+
+export interface SnapshotMeta {
+  generated_at: string | null   // null until the first export is published
+  source: string
+  shards: number
+  badges: Record<string, { count: number; threshold?: number }>
+}

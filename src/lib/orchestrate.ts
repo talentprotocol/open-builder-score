@@ -3,7 +3,7 @@ import { readChainCredentials, type ChainReadResult } from './chains'
 import { readGithubCredentials } from './github'
 import { readSpeedrunCredential } from './speedrun'
 import { readVerifiedBuilder } from './easscan'
-import type { CredentialInput, EngineInputs, ScoreResult, Spec } from './types'
+import type { BadgeResult, CredentialInput, EngineInputs, ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
 
@@ -13,12 +13,15 @@ export interface GatherResult {
 }
 
 // A fully computed score bundle as the UI screens pass it around.
+// Badges ride along but stay outside `score`: they carry no points and must
+// never gate attestation, so nothing downstream reads them as scoring input.
 export interface Scored {
   score: ScoreResult
   gather: GatherResult
   address: `0x${string}`
   githubHandle: string | null
   extraAddresses: `0x${string}`[]
+  badges: BadgeResult[]
 }
 
 export interface Fetchers {
