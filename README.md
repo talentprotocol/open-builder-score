@@ -158,7 +158,7 @@ re-derived at an as-of anchor.
 
 | badge | source | how it's checked |
 |---|---|---|
-| $BUILD Contributor | live RPC **+** dated snapshot | `donated(address) > 0` on Base `0x556e…FdB7`, **or** a BUILD pay-it-forward registration |
+| $BUILD Contributor | live RPC **+** dated snapshot | `donated(address) > 0` on Base `0x556e…FdB7`, **or** a BUILD pay-it-forward donation |
 | Launched a Talent Token | onchain history, frozen | membership in the v1 TalentFactory's `TalentCreated` history — Celo `0xa902…8246` + Polygon `0xa91b…fde0`, 564 wallets |
 | Builder Score 100+ | dated snapshot | membership in an export from Talent Protocol |
 | Earned Builder Rewards | dated snapshot | membership in an export from Talent Protocol |
@@ -169,13 +169,15 @@ database *first* and only falls back to `donated()` — an allocation recorded t
 especially one on a custody wallet rather than the wallet a user would type in, is invisible
 to the live read. That database is gone (`BUILD_DATABASE_URL` points at a Supabase project
 that no longer resolves, matching `build_contribution` being marked Remove in the 2025
-credential set), so the snapshot exports every wallet in **`build_pay_forward_wallets`**
-instead — both the social and the custody side. Custody wallets are not linked accounts, so
-that table is the only place they come from.
+credential set), so the snapshot exports **`build_pay_forward_wallets`** instead — the
+donors who gave their BUILD allocation away. Both sides of each pair ship, because the
+donation sits on the custody wallet and custody wallets are not linked accounts, so that
+table is the only place they come from.
 
-That is a deliberate widening: **a pay-it-forward registration earns the badge without a
-recorded contribution**. Read it as "took part in BUILD", which is what the badge text says,
-not as proof of a donated amount.
+Neither check subsumes the other: `donated()` records direct donations to the contract,
+while pay-it-forward donations were recorded in the BUILD database. Sampling the export
+against the contract, roughly a third of these wallets also show a non-zero `donated()` —
+so the two overlap without either being complete.
 
 The export also reads the stored `build_contribution` data point, but that population is
 **empty**: the credential row was deleted when it was retired, and `Credential has_many
