@@ -7,37 +7,48 @@ import type { CredentialInput } from '@/lib/types'
 
 const spec = specJson as Spec
 const registry = registryJson as unknown as Registry
-const pocRpcSlugs = new Set(
-  spec.credentials.filter((c) => c.poc && c.tier === 'rpc').map((c) => c.slug),
+const activeRpcSlugs = new Set(
+  spec.credentials.filter((c) => c.status === 'active' && c.tier === 'rpc').map((c) => c.slug),
 )
 
 describe('buildChainPlan', () => {
-  const plan = buildChainPlan(registry, pocRpcSlugs)
+  const plan = buildChainPlan(registry, activeRpcSlugs)
   const byChain = Object.fromEntries(plan.map((p) => [p.chainId, p.reads.length]))
 
+  // Excluding a credential also drops any chain it was the only reason to
+  // dial: Ethereum went with CNC + $CODE, Base Sepolia with Base Learn. Four
+  // chains instead of six means fewer ways for a scan to come back
+  // incomplete, which is what gates attestation.
   it('plans the exact per-chain contract counts', () => {
     expect(byChain).toEqual({
-      1: 2,       // CNC + $CODE
       10: 29,     // 4 ETHGlobal packs + 19 finalists + 6 BuidlGuidl batches
       137: 1,     // ETHernals
       42161: 13,  // 7 Devfolio + 6 BuidlGuidl batches
-      8453: 9,    // 3 Devfolio + 3 Base Devfolio + Farcon + $TALENT + vault
-      84532: 13,  // 13 Base Learn SBTs
+      8453: 6,    // 3 Devfolio + 3 Base Devfolio
     })
   })
 
-  it('never plans non-POC or non-rpc credentials', () => {
-    const slugs = new Set(plan.flatMap((p) => p.reads.map((r) => r.slug)))
-    expect(slugs.has('devfolio_hackathons_won')).toBe(false)
-    expect(slugs.has('talent_protocol_verified_builder')).toBe(false)
+  it('still plans Base, which carries the as-of block anchor', () => {
+    expect(plan.some((p) => p.chainId === 8453)).toBe(true)
   })
 
-  it('tags the vault read with its method', () => {
-    const base = plan.find((p) => p.chainId === 8453)!
-    const vault = base.reads.filter((r) => r.slug === 'talent_vault')
-    expect(vault).toHaveLength(1)
-    expect(vault[0].method).toBe('contract_call')
-    expect(vault[0].address).toBe('0x23Ff3256A29847d7EF760943bd6679b565CbdE5a')
+  it('never plans deferred, excluded, or non-rpc credentials', () => {
+    const slugs = new Set(plan.flatMap((p) => p.reads.map((r) => r.slug)))
+    expect(slugs.has('devfolio_hackathons_won')).toBe(false) // deferred
+    expect(slugs.has('talent_vault')).toBe(false) // excluded
+    expect(slugs.has('base_learn')).toBe(false) // excluded
+    expect(slugs.has('talent_protocol_verified_builder')).toBe(false) // not rpc
+  })
+
+  // Asserted against an explicit slug set rather than the active set: the
+  // registry entry survives the exclusion, and the method tagging is planner
+  // behaviour that shouldn't ride on an editorial decision.
+  it('tags a contract_call read with its method', () => {
+    const vaultPlan = buildChainPlan(registry, new Set(['talent_vault']))
+    const reads = vaultPlan.flatMap((p) => p.reads).filter((r) => r.slug === 'talent_vault')
+    expect(reads).toHaveLength(1)
+    expect(reads[0].method).toBe('contract_call')
+    expect(reads[0].address).toBe('0x23Ff3256A29847d7EF760943bd6679b565CbdE5a')
   })
 })
 

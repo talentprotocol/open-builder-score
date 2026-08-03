@@ -3,8 +3,11 @@
 // Pure module: no framework, no fetches. Unknown enum values throw so a bad
 // spec edit fails the tests instead of shipping a wrong page.
 
+import registryJson from '../../spec/badge-registry.json'
 import { badgeChecks } from './badges'
-import type { BadgeCheck, BadgeDefinition, Spec, SpecCredential } from './types'
+import type { BadgeCheck, BadgeDefinition, Registry, Spec, SpecCredential } from './types'
+
+const registry = registryJson as unknown as Registry
 
 export interface CredentialGroup {
   key: 'chains' | 'github' | 'speedrun' | 'verifiedBuilder'
@@ -19,7 +22,7 @@ const EAS_SLUG = 'talent_protocol_verified_builder'
 // Group order and vocabulary mirror the scan checklist (SOURCE_LABELS on the
 // results page), so the reference reads as the annotated version of the scan.
 export function groupCredentials(spec: Spec): CredentialGroup[] {
-  const active = spec.credentials.filter((c) => c.poc)
+  const active = spec.credentials.filter((c) => c.status === 'active')
   const groups: Omit<CredentialGroup, 'maxTotal'>[] = [
     {
       key: 'chains',
@@ -48,6 +51,65 @@ export function groupCredentials(spec: Spec): CredentialGroup[] {
     ...g,
     maxTotal: g.credentials.reduce((sum, c) => sum + c.max_score, 0),
   }))
+}
+
+// How many chains a credential scan actually dials, derived rather than
+// written down: excluding a credential can retire a whole chain (CNC and
+// $CODE were the only reason to touch Ethereum), and the scan checklist has
+// to say the true number. Mirrors chains.ts's grouping without importing it,
+// so the UI copy doesn't pull viem into its bundle; a test pins the two
+// together.
+export function scannedChainCount(spec: Spec): number {
+  const chains = new Set<string>()
+  for (const c of spec.credentials) {
+    if (c.status !== 'active' || c.tier !== 'rpc') continue
+    const entry = registry.credentials[c.slug]
+    if (!entry || !Array.isArray(entry.contracts)) continue
+    for (const contract of entry.contracts) chains.add(contract.chain)
+  }
+  return chains.size
+}
+
+export interface UncountedGroup {
+  status: 'excluded' | 'deferred'
+  label: string
+  blurb: string
+  credentials: SpecCredential[]
+}
+
+// The credentials the score deliberately leaves on the table. Stating why is
+// the point of an open score: a reader can disagree with the cut and see
+// exactly what it cost. `excluded` first — that is the editorial position;
+// `deferred` is only a to-do list.
+export function uncountedCredentials(spec: Spec): UncountedGroup[] {
+  const groups: Omit<UncountedGroup, 'credentials'>[] = [
+    {
+      status: 'excluded',
+      label: 'Excluded on purpose',
+      blurb:
+        'Computable, and left out anyway. Attendance, membership and token balances say what someone showed up to or bought, not what they built — and testnet badges are cheap to farm.',
+    },
+    {
+      status: 'deferred',
+      label: 'Not computable yet',
+      blurb:
+        'Credentials we want, blocked on reading NFT token metadata rather than plain balances. They are in the spec so the gap stays visible.',
+    },
+  ]
+  return groups
+    .map((g) => ({
+      ...g,
+      credentials: spec.credentials.filter((c) => c.status === g.status),
+    }))
+    .filter((g) => g.credentials.length > 0)
+}
+
+// Every uncounted credential must explain itself; a silent exclusion is
+// exactly the thing this page exists to prevent.
+export function statusReason(c: SpecCredential): string {
+  if (c.status === 'active') throw new Error(`${c.slug} is active and has no status reason`)
+  if (!c.status_reason) throw new Error(`${c.slug} is ${c.status} without a status_reason`)
+  return c.status_reason
 }
 
 // General form of the engine's instantiated formula (engine.ts renders
@@ -106,10 +168,10 @@ export function describeCalculation(c: SpecCredential): string | null {
 }
 
 // Curated user-facing notes. Raw spec notes are dev-facing and stay out of
-// the UI; only these two change what a reader should expect from a score.
+// the UI; these change what a reader should expect from a score. Uncounted
+// credentials don't need one — their `status_reason` is the note.
 const DISPLAY_NOTES: Record<string, string> = {
   github_repositories: 'Approximates production: public repo count vs. repos contributed-to.',
-  base_learn: 'Badges live on Base Sepolia (testnet).',
 }
 
 export function displayNote(c: SpecCredential): string | null {

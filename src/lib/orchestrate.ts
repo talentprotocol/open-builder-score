@@ -25,7 +25,7 @@ export interface Scored {
 }
 
 export interface Fetchers {
-  chains: (address: `0x${string}`, pocRpcSlugs: Set<string>) => Promise<ChainReadResult>
+  chains: (address: `0x${string}`, activeRpcSlugs: Set<string>) => Promise<ChainReadResult>
   github: (handle: string | null) => Promise<Record<string, CredentialInput>>
   speedrun: (address: string) => Promise<CredentialInput>
   verifiedBuilder: (address: string) => Promise<CredentialInput>
@@ -58,15 +58,18 @@ export async function gatherMultiInputs(
   if (addresses.length === 0) throw new Error('gatherMultiInputs requires at least one address')
   const f = { ...defaultFetchers, ...fetchers }
   const computedAt = Math.floor(Date.now() / 1000)
-  const pocRpcSlugs = new Set(
-    spec.credentials.filter((c) => c.poc && c.tier === 'rpc').map((c) => c.slug),
+  // Derives the chain set too (chains.ts groups the reads by contract chain),
+  // so excluding a credential also stops us dialling any chain it was the only
+  // reason to read.
+  const activeRpcSlugs = new Set(
+    spec.credentials.filter((c) => c.status === 'active' && c.tier === 'rpc').map((c) => c.slug),
   )
 
   const settle = <T,>(source: GatherSource, promise: Promise<T>): Promise<T> =>
     promise.finally(() => onSourceSettled?.(source))
 
   const [chainResults, github, speedruns, verifiedBuilders] = await Promise.all([
-    settle('chains', Promise.all(addresses.map((a) => f.chains(a, pocRpcSlugs)))),
+    settle('chains', Promise.all(addresses.map((a) => f.chains(a, activeRpcSlugs)))),
     settle('github', f.github(githubHandle)),
     settle('speedrun', Promise.all(addresses.map((a) => f.speedrun(a)))),
     settle('verifiedBuilder', Promise.all(addresses.map((a) => f.verifiedBuilder(a)))),

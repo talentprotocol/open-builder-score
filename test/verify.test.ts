@@ -6,6 +6,7 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isSelfAttested,
   parseAttestationResponse,
   scoreVerdict,
   validateAttestation,
@@ -135,6 +136,30 @@ describe('classifyAttestation', () => {
   it('classifies a foreign schema as malformed even when also revoked (precedence)', () => {
     const att = attestation({ schemaId: `0x${'00'.repeat(32)}`, revocationTime: 1784976000 })
     expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('malformed')
+  })
+})
+
+describe('isSelfAttested', () => {
+  const decoded = () => decodeAttestationData(encodeData())!
+
+  it('is true when the attester is the scored wallet, whatever the casing', () => {
+    expect(isSelfAttested(attestation(), decoded())).toBe(true)
+    expect(
+      isSelfAttested(attestation({ attester: WALLET.toLowerCase() as `0x${string}` }), decoded()),
+    ).toBe(true)
+  })
+  it('is false when someone else attested the score', () => {
+    expect(isSelfAttested(attestation({ attester: zeroAddress }), decoded())).toBe(false)
+  })
+  it('is false rather than throwing on a malformed attester', () => {
+    expect(isSelfAttested(attestation({ attester: 'not-an-address' }), decoded())).toBe(false)
+  })
+  it('does not affect the score verdict or classification', () => {
+    // The two facts are independent: a score attested by a third party still
+    // recomputes correctly, and pre-gate attestations must not read as malformed.
+    const thirdParty = attestation({ attester: zeroAddress })
+    expect(classifyAttestation(thirdParty, decoded()).kind).toBe('ok')
+    expect(scoreVerdict(103, scoreResult(103, true))).toBe('match')
   })
 })
 

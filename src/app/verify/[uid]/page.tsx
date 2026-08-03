@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
+import { scannedChainCount } from '@/lib/credential-reference'
 import { gatherInputs, type GatherSource } from '@/lib/orchestrate'
 import { readGithubCredentials } from '@/lib/github'
 import { authorizedFetch } from '@/lib/github-auth'
@@ -13,6 +14,7 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isSelfAttested,
   scoreVerdict,
   type DecodedScoreAttestation,
   type OnchainAttestation,
@@ -95,7 +97,18 @@ function AttestationDetails({
       </div>
       <div className="flex justify-between gap-4 border-b border-border py-1.5">
         <dt className="shrink-0 text-muted-foreground">Attester</dt>
-        <dd className="break-all text-right font-mono text-sm">{attestation.attester}</dd>
+        <dd className="break-all text-right font-mono text-sm">
+          {attestation.attester}
+          {isSelfAttested(attestation, decoded) ? (
+            <span className="block font-sans text-xs text-success-text">
+              ✓ Self-attested — the scored wallet signed this itself
+            </span>
+          ) : (
+            <span className="block font-sans text-xs text-warning-text">
+              ⚠ Not the scored wallet — someone else attested this score
+            </span>
+          )}
+        </dd>
       </div>
       <div className="flex justify-between gap-4 py-1.5">
         <dt className="shrink-0 text-muted-foreground">Onchain record</dt>
@@ -218,7 +231,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
             <ul className="mt-4 flex flex-col gap-2.5 text-base">
               {(
                 [
-                  ['chains', 'Onchain badges & balances (6 chains)'],
+                  ['chains', `Onchain badges & balances (${scannedChainCount(spec)} chains)`],
                   ['github', 'GitHub'],
                   ['speedrun', 'SpeedRun Ethereum'],
                   ['verifiedBuilder', 'EAS attestations'],

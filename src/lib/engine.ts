@@ -102,8 +102,8 @@ function scoreCredential(
 }
 
 export function computeScore(inputs: EngineInputs, spec: Spec): ScoreResult {
-  const pocCredentials = spec.credentials.filter((c) => c.poc)
-  const perCredential = pocCredentials.map((c) =>
+  const activeCredentials = spec.credentials.filter((c) => c.status === 'active')
+  const perCredential = activeCredentials.map((c) =>
     scoreCredential(
       c,
       inputs.values[c.slug] ?? { status: 'unavailable', reason: 'not fetched' },
@@ -113,7 +113,7 @@ export function computeScore(inputs: EngineInputs, spec: Spec): ScoreResult {
   )
   return {
     total: perCredential.reduce((sum, r) => sum + r.points, 0),
-    maxTotal: pocCredentials.reduce((sum, c) => sum + c.max_score, 0),
+    maxTotal: activeCredentials.reduce((sum, c) => sum + c.max_score, 0),
     perCredential,
     complete: perCredential.every((r) => r.state !== 'unavailable'),
   }

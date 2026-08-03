@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { isAddress } from 'viem'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
+import { scannedChainCount } from '@/lib/credential-reference'
 import { gatherMultiInputs, type GatherSource, type Scored } from '@/lib/orchestrate'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { readGithubCredentials } from '@/lib/github'
@@ -33,8 +34,10 @@ const spec = specJson as Spec
 // pipeline so the verify screen, which recomputes a score, never fetches them.
 type ScanSource = GatherSource | 'badges'
 
+const CHAIN_COUNT = scannedChainCount(spec)
+
 const SOURCE_LABELS: Record<ScanSource, string> = {
-  chains: 'Onchain badges & balances (6 chains)',
+  chains: `Onchain badges & balances (${CHAIN_COUNT} chains)`,
   github: 'GitHub',
   speedrun: 'SpeedRun Ethereum',
   verifiedBuilder: 'EAS attestations',
@@ -218,7 +221,7 @@ export default function ResultsPage({
                 >
                   <PingDot settled={done} />
                   {source === 'chains' && extrasRaw.length > 0
-                    ? `Onchain badges & balances (6 chains, ${extrasRaw.length + 1} wallets)`
+                    ? `Onchain badges & balances (${CHAIN_COUNT} chains, ${extrasRaw.length + 1} wallets)`
                     : SOURCE_LABELS[source]}
                 </li>
               )

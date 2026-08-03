@@ -149,6 +149,25 @@ export function validateAttestation(
   return problems
 }
 
+// EAS records the attester as msg.sender, so a self-attested record is proof
+// the scored wallet signed for itself — permissionlessly checkable, which is
+// exactly what a browser-only message signature would not be.
+//
+// Deliberately kept out of classifyAttestation and scoreVerdict: attestations
+// made before the attest-time ownership gate legitimately have
+// attester !== wallet, and retroactively calling those malformed would be
+// wrong. Score correctness and wallet ownership are independent facts.
+export function isSelfAttested(
+  att: OnchainAttestation,
+  decoded: DecodedScoreAttestation,
+): boolean {
+  try {
+    return getAddress(att.attester) === getAddress(decoded.wallet)
+  } catch {
+    return false
+  }
+}
+
 export type AttestationClassification =
   | { kind: 'malformed'; problems: string[] }
   | { kind: 'revoked'; decoded: DecodedScoreAttestation }

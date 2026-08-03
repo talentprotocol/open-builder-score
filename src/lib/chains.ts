@@ -57,10 +57,10 @@ export const MAINNET_RPC_URLS = CHAIN_CONFIG[1].rpcUrls
 // credentials can never disagree about what "celo-mainnet" means.
 export const CHAIN_IDS: Record<string, number> = registry.chains
 
-export function buildChainPlan(reg: Registry, pocRpcSlugs: Set<string>): ChainPlan[] {
+export function buildChainPlan(reg: Registry, activeRpcSlugs: Set<string>): ChainPlan[] {
   const byChain = new Map<number, PlannedRead[]>()
   for (const [slug, entry] of Object.entries(reg.credentials)) {
-    if (!pocRpcSlugs.has(slug) || !Array.isArray(entry.contracts)) continue
+    if (!activeRpcSlugs.has(slug) || !Array.isArray(entry.contracts)) continue
     for (const contract of entry.contracts) {
       const chainId = reg.chains[contract.chain]
       if (!byChain.has(chainId)) byChain.set(chainId, [])
@@ -160,9 +160,9 @@ export function clientFor(chainId: number): PublicClient {
 
 export async function readChainCredentials(
   address: `0x${string}`,
-  pocRpcSlugs: Set<string>,
+  activeRpcSlugs: Set<string>,
 ): Promise<ChainReadResult> {
-  const plans = buildChainPlan(registry, pocRpcSlugs)
+  const plans = buildChainPlan(registry, activeRpcSlugs)
   let baseBlockNumber: bigint | null = null
 
   const perChain = await Promise.all(

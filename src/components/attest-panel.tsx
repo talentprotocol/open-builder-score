@@ -70,6 +70,14 @@ export function AttestPanel({ scored }: { scored: Scored }) {
     )
   }
 
+  // The attestation's whole claim is "this wallet signed for itself" — EAS
+  // records the attester as msg.sender, so attesting from a different wallet
+  // would put an unprovable score onchain. Checked here rather than with a
+  // SIWE message because the transaction signature is the proof, and unlike a
+  // browser-only personal_sign anyone can verify it afterwards.
+  const walletOwned =
+    connected !== undefined && connected.toLowerCase() === scored.address.toLowerCase()
+
   async function handleSwitch() {
     if (busy) return
     setBusy(true)
@@ -86,7 +94,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
 
   async function handleAttest() {
     // Only rendered on the target chain, so walletClient is the fresh, correct-chain client.
-    if (!walletClient || busy) return
+    if (!walletClient || busy || !walletOwned) return
     setBusy(true)
     setError(null)
     try {
@@ -116,7 +124,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       </p>
       <div className="flex items-center gap-3">
         <ConnectButton showBalance={false} />
-        {connected && chainId !== ATTEST_CHAIN_ID && (
+        {connected && walletOwned && chainId !== ATTEST_CHAIN_ID && (
           <Button onClick={handleSwitch} disabled={busy}>
             {busy ? (
               <span className="flex items-center gap-2">
@@ -127,7 +135,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
             )}
           </Button>
         )}
-        {connected && chainId === ATTEST_CHAIN_ID && (
+        {connected && walletOwned && chainId === ATTEST_CHAIN_ID && (
           <Button onClick={handleAttest} disabled={busy || !walletClient}>
             {busy ? (
               <span className="flex items-center gap-2">
@@ -139,6 +147,14 @@ export function AttestPanel({ scored }: { scored: Scored }) {
           </Button>
         )}
       </div>
+      {connected && !walletOwned && (
+        <p className="text-sm text-warning-text">
+          You&apos;re connected as <span className="font-mono break-all">{connected}</span>, but
+          this score is for <span className="font-mono break-all">{scored.address}</span>. Connect
+          the scored wallet to attest it — an attestation only means something if the wallet signs
+          for itself.
+        </p>
+      )}
       {error && <p className="text-sm text-destructive-text break-all">{error}</p>}
       {attestationUid && (
         <FadeRise>
