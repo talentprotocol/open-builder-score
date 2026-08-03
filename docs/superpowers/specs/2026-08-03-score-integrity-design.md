@@ -24,21 +24,43 @@ Two bugs, both of which present as "no feedback, nothing happens".
    github.com/login/device* — backgrounding the tab is the normal path. Verified
    against a hidden tab: the device-code request fired, eight token polls ran,
    and the DOM still read "Sign in with GitHub to verify your handle". The device
-   code was never rendered. Replaced with a keyed `motion.div`: each state still
-   fades in on mount, but nothing in the state machine waits on an animation.
+   code was never rendered. The replacement flow has no in-page state machine at
+   all, which retires the whole failure class.
 
-**No secret is involved, and none is missing.** The device flow has no client
-secret and no redirect URI by specification. Nothing needs configuring locally
-or in Vercel. `NEXT_PUBLIC_GITHUB_CLIENT_ID` was added only so the app can be
-pointed at a different GitHub app without a code change — the committed client
-ID remains the default, so zero-config still holds.
+Failures are now loud. GitHub reports authorization failures with **HTTP 200
+and an error body**, which the client used to flatten into "GitHub returned an
+unexpected shape"; the real `error` / `error_description` now surfaces, and a
+guarded JSON parse plus a 10s timeout stops an HTML rate-limit page from
+becoming an opaque 500.
 
-Failures are now loud. GitHub reports `device_flow_disabled` and friends with
-**HTTP 200 and an error body**, which the client used to flatten into "GitHub
-returned an unexpected shape"; the real `error` / `error_description` now
-surfaces. Both passthroughs share `relay()`, which guards the JSON parse and
-adds a 10s timeout, so an HTML rate-limit page becomes a structured 502 instead
-of a Next 500.
+### Then the flow itself changed
+
+Fixing the bugs left the device flow working but still asking a browser user to
+copy a code into a second tab — a TV/CLI affordance, not a web one. Replaced
+with the standard OAuth web flow: click, authorize, land back signed in.
+
+**This is the one place the repo needs a secret.** GitHub does not support
+PKCE, so there is no secretless redirect flow; `GITHUB_CLIENT_SECRET` is the
+price. It stays a server-side env var read only by `github-oauth.ts`, never
+committed and never in the client bundle. Scoring is unaffected — it is fully
+client-side and works signed-out — so a deployment without the secret degrades
+to "sign-in isn't configured" rather than breaking.
+
+Three routes, no server-side state:
+
+- `/api/github/authorize` mints a CSRF `state`, packs it with the return path
+  into one `HttpOnly` cookie (so a tampered state can't be paired with an
+  attacker-chosen landing page), and redirects to GitHub.
+- `/api/github/callback` verifies `state`, does the secret-bearing exchange,
+  and parks `{token, login}` in a short-lived `HttpOnly` cookie.
+- `/api/github/session` hands that to the client once and clears it.
+
+The token still ends up in `sessionStorage` — per tab, gone on close, the same
+blast radius as before — because the browser needs it: scoring reads
+api.github.com client-side, and that is what lifts the rate limit. Return paths
+go through `safeReturnPath`, which rejects `//evil.com` and `/\evil.com` as well
+as absolute URLs, since a leading slash alone still permits a protocol-relative
+off-origin redirect.
 
 ## 2. Wallet ownership, without SIWE
 

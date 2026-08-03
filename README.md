@@ -19,16 +19,16 @@ Context docs (internal):
 3. The result is **attestable** — an EAS attestation that anyone can verify by recomputing.
 
 Out of scope for the POC (deliberately): multi-wallet aggregation, GitHub sign-in
-(device flow + worker), Tier 2 explorer-backed credentials, verifier view, embeddable
+(OAuth), Tier 2 explorer-backed credentials, verifier view, embeddable
 widget, percentile context.
 
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4) — standard runtime, but everything
   meaningful is client-side (`"use client"`): no server state. The only server code is the
-  pair of stateless GitHub device-flow passthroughs under `/api/github/*`, which exist
-  solely because GitHub's device endpoints send no CORS headers. The engine stays
-  framework-free (`src/lib/engine.ts`).
+  three GitHub OAuth routes under `/api/github/*`, which exist because the token exchange
+  needs a client secret the browser must never see. The engine stays framework-free
+  (`src/lib/engine.ts`).
 - [viem](https://viem.sh) for RPC, with Multicall3 batching
   (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on every chain)
 - RainbowKit + wagmi for wallet connection — needed only for the attest step; scoring
@@ -164,9 +164,8 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       E2E verified 2026-07-25 incl. the wrong-network switch path. Base mainnet registration
       deferred until after Sepolia validation (flip `ATTEST_CHAIN_ID` in `src/lib/eas.ts`).
 - [x] **8. Deploy** — Vercel ✅ 2026-07-25: [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app).
-      No env vars, no secrets — the only server-side code is the two stateless GitHub
-      device-flow passthrough routes (`/api/github/*`), which hold no state and pin the
-      public client ID. Deployed via `vercel deploy --prod` from local `main`
+      The only server-side code is the three GitHub OAuth routes (`/api/github/*`), which
+      hold no state; `GITHUB_CLIENT_SECRET` is set in the Vercel project, never committed. Deployed via `vercel deploy --prod` from local `main`
       (no git integration yet — redeploys are manual).
 
 ## Badges
@@ -267,25 +266,53 @@ All three README-era unknowns were extracted from talent-api and live-verified (
    `any?` short-circuit means prod effectively only queries Base; this POC follows the spec
    and queries both.)
 
-## GitHub sign-in needs no secret
+## GitHub sign-in
 
-Recurring question, so: the OAuth **device flow** has no client secret and no redirect URI
-by specification. There is nothing to configure locally and nothing to set in Vercel — the
-client ID is a public identifier and ships committed, exactly like the WalletConnect
-projectId. `NEXT_PUBLIC_GITHUB_CLIENT_ID` exists only to point the app at a different
-GitHub app without a code change; leave it unset and sign-in works.
+Standard OAuth web flow: click, authorize on github.com, land back signed in. One tab, two
+clicks, nothing to type.
 
 Signing in buys two things: it proves the GitHub handle going into a score is yours (the
-attest panel enforces the match), and it lifts the GitHub API limit from 60 to 5,000
-req/hr. The token is scope-less and lives in `sessionStorage`, so it dies with the tab.
+attest panel enforces the match), and it lifts the GitHub API limit from 60 to 5,000 req/hr.
+The token is scope-less and lives in `sessionStorage`, so it dies with the tab.
+
+**This is the one place the repo needs a secret.** GitHub does not support PKCE, so
+exchanging the callback code for a token requires `GITHUB_CLIENT_SECRET`. It is read only in
+`src/lib/github-oauth.ts`, which is server-only — it never enters the client bundle, and it
+is never committed. Scoring is unaffected either way: it is fully client-side and works
+signed-out, so a deployment without the secret just reports that sign-in isn't configured.
+
+| variable | where | required |
+|---|---|---|
+| `GITHUB_CLIENT_SECRET` | server only — `.env.local`, and Vercel project settings | for sign-in |
+| `NEXT_PUBLIC_GITHUB_CLIENT_ID` | optional override; the committed default is a public identifier | no |
+
+Setup, once per environment:
+
+1. In the GitHub app's settings, add a **Callback URL** for each origin —
+   `http://localhost:3000/api/github/callback` and the deployed equivalent. GitHub
+   validates `redirect_uri` against this list, so an unregistered origin simply fails.
+2. Generate a client secret and put it in `.env.local` (git-ignored) and in Vercel.
+3. Nothing else — no scopes are requested, and no installation is required.
+
+The flow is three small routes and no server-side state: `/api/github/authorize` mints a
+CSRF `state` and redirects to GitHub; `/api/github/callback` verifies that `state`, does the
+secret-bearing exchange, and parks `{token, login}` in a short-lived `HttpOnly` cookie;
+`/api/github/session` hands that to the client once and clears it, so the token's resting
+place stays `sessionStorage`.
+
+This replaced an OAuth **device flow**, which needed no secret but asked the user to copy a
+code into a second tab — a TV/CLI affordance, not a web one. The secret is the price of the
+better flow; GitHub offers no secretless redirect.
 
 ## Ground rules
 
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.
 - `spec.json` is versioned; any weight/credential change bumps the version. Attestations
   carry the version they were computed with.
-- Zero secrets in the repo, zero server-side state. If a feature needs a backend, it's out
-  of scope for this repo (except, later, one stateless CORS/token worker for GitHub sign-in).
+- Zero secrets **in the repo** and zero server-side state. `GITHUB_CLIENT_SECRET` is the
+  single exception, and it stays an environment variable read only by server code — GitHub
+  has no PKCE, so a redirect sign-in cannot be done without one. Everything that computes a
+  score still runs in the browser against public endpoints with no keys.
 - **Wallet ownership is proved by the attestation, not by SIWE.** Anyone may score any
   address — that's the point of an open score — but attesting requires the connected wallet
   to *be* the scored wallet. EAS records the attester as `msg.sender`, so the transaction
