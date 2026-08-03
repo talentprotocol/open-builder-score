@@ -44,6 +44,41 @@ describe('device-code route', () => {
     )
     expect(response.status).toBe(400)
   })
+  it('relays a 502 when GitHub answers with HTML instead of throwing a 500', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () => new Response('<html>rate limited</html>', { status: 429 })) as typeof fetch,
+    )
+    const response = await deviceCodePost(jsonRequest({ client_id: GITHUB_CLIENT_ID }))
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({
+      error: 'upstream_unavailable',
+      error_description: 'GitHub returned a non-JSON response (429).',
+    })
+  })
+  it('relays a 502 when GitHub is unreachable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () => {
+        throw new Error('ETIMEDOUT')
+      }) as typeof fetch,
+    )
+    const response = await deviceCodePost(jsonRequest({ client_id: GITHUB_CLIENT_ID }))
+    expect(response.status).toBe(502)
+    expect((await response.json()).error).toBe('upstream_unavailable')
+  })
+  it('passes GitHub’s 200-with-error body straight through', async () => {
+    vi.stubGlobal(
+      'fetch',
+      (async () =>
+        new Response(JSON.stringify({ error: 'device_flow_disabled' }), {
+          status: 200,
+        })) as typeof fetch,
+    )
+    const response = await deviceCodePost(jsonRequest({ client_id: GITHUB_CLIENT_ID }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ error: 'device_flow_disabled' })
+  })
 })
 
 describe('token route', () => {

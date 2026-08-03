@@ -1,6 +1,10 @@
 // GitHub OAuth device flow (zero scopes). The client ID is a public
-// identifier — same precedent as the WalletConnect projectId.
-export const GITHUB_CLIENT_ID = 'Ov23lifhhYZia6r3ZYv3'
+// identifier — same precedent as the WalletConnect projectId — so it ships
+// committed and nothing needs configuring to run the app. The env override
+// exists only so the app can be pointed at a different GitHub app without a
+// code change; there is no secret and no redirect URI in this flow.
+export const GITHUB_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || 'Ov23lifhhYZia6r3ZYv3'
 
 // Same-origin passthrough routes (GitHub's device-flow endpoints send no
 // CORS headers, so the browser can't call them directly).
@@ -29,6 +33,32 @@ export type PollResult =
 
 export type UserResult = { status: 'ok'; login: string } | { status: 'error'; reason: string }
 
+// GitHub answers these with HTTP 200 and an error body, so without this map
+// a misconfigured app reads as "unexpected shape" and nothing else.
+const DEVICE_FLOW_ERRORS: Record<string, string> = {
+  device_flow_disabled: 'This GitHub app doesn’t have device flow enabled.',
+  incorrect_client_credentials: 'GitHub rejected the app’s client ID.',
+  unverified_user_email: 'Verify your primary email address on GitHub, then try again.',
+}
+
+// Null when the body carries no `error` — the caller then falls through to its
+// own shape/status handling.
+function describeGithubError(raw: Record<string, unknown>): string | null {
+  if (typeof raw.error !== 'string') return null
+  const known = DEVICE_FLOW_ERRORS[raw.error]
+  if (known) return known
+  if (typeof raw.error_description === 'string') return raw.error_description
+  return `GitHub said: ${raw.error}`
+}
+
+async function readJson(response: Response): Promise<Record<string, unknown> | null> {
+  try {
+    return (await response.json()) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 export async function requestDeviceCode(fetchFn: typeof fetch = fetch): Promise<DeviceCodeResult> {
   try {
     const response = await fetchFn(DEVICE_CODE_ENDPOINT, {
@@ -36,8 +66,14 @@ export async function requestDeviceCode(fetchFn: typeof fetch = fetch): Promise<
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: GITHUB_CLIENT_ID }),
     })
-    if (!response.ok) return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
-    const raw = (await response.json()) as Record<string, unknown>
+    const raw = await readJson(response)
+    // Checked before the status, because GitHub reports device_flow_disabled
+    // and friends with a 200.
+    const described = raw && describeGithubError(raw)
+    if (described) return { status: 'error', reason: described }
+    if (!response.ok || raw === null) {
+      return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
+    }
     if (
       typeof raw.device_code !== 'string' ||
       typeof raw.user_code !== 'string' ||
@@ -81,8 +117,10 @@ export async function pollForToken(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_id: GITHUB_CLIENT_ID, device_code: deviceCode }),
       })
-      if (!response.ok) return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
-      const raw = (await response.json()) as Record<string, unknown>
+      const raw = await readJson(response)
+      if (raw === null) {
+        return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
+      }
       if (typeof raw.access_token === 'string') return { status: 'token', token: raw.access_token }
       switch (raw.error) {
         case 'authorization_pending':
@@ -97,7 +135,10 @@ export async function pollForToken(
         case 'access_denied':
           return { status: 'denied' }
         default:
-          return { status: 'error', reason: 'GitHub returned an unexpected shape' }
+          return {
+            status: 'error',
+            reason: describeGithubError(raw) ?? 'GitHub returned an unexpected shape',
+          }
       }
     } catch {
       return { status: 'error', reason: 'GitHub sign-in is unreachable' }

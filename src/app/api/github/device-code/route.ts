@@ -1,4 +1,5 @@
 import { GITHUB_CLIENT_ID } from '@/lib/github-auth'
+import { relay } from '../relay'
 
 // The README-sanctioned stateless worker, colocated as a route handler:
 // GitHub's device-flow endpoints send no CORS headers, so the browser cannot
@@ -14,10 +15,5 @@ export async function POST(request: Request): Promise<Response> {
   if ((body as { client_id?: unknown })?.client_id !== GITHUB_CLIENT_ID) {
     return Response.json({ error: 'unauthorized_client' }, { status: 400 })
   }
-  const upstream = await fetch('https://github.com/login/device/code', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ client_id: GITHUB_CLIENT_ID }),
-  })
-  return Response.json(await upstream.json(), { status: upstream.status })
+  return relay('https://github.com/login/device/code', { client_id: GITHUB_CLIENT_ID })
 }

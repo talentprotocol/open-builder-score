@@ -41,6 +41,34 @@ describe('requestDeviceCode', () => {
     expect(captured!.url).toBe(DEVICE_CODE_ENDPOINT)
     expect(captured!.body).toContain(GITHUB_CLIENT_ID)
   })
+  it('surfaces GitHub’s own error instead of "unexpected shape"', async () => {
+    // GitHub reports this with a 200, which is why it used to be invisible.
+    const disabled = (async () =>
+      jsonResponse({ error: 'device_flow_disabled' })) as typeof fetch
+    expect(await requestDeviceCode(disabled)).toEqual({
+      status: 'error',
+      reason: 'This GitHub app doesn’t have device flow enabled.',
+    })
+    const described = (async () =>
+      jsonResponse({ error: 'some_new_code', error_description: 'Something specific.' })) as typeof fetch
+    expect(await requestDeviceCode(described)).toEqual({
+      status: 'error',
+      reason: 'Something specific.',
+    })
+    const bare = (async () => jsonResponse({ error: 'some_new_code' })) as typeof fetch
+    expect(await requestDeviceCode(bare)).toEqual({
+      status: 'error',
+      reason: 'GitHub said: some_new_code',
+    })
+  })
+  it('maps a non-JSON body to error rather than throwing', async () => {
+    const html = (async () =>
+      new Response('<html>rate limited</html>', { status: 429 })) as typeof fetch
+    expect(await requestDeviceCode(html)).toEqual({
+      status: 'error',
+      reason: 'GitHub sign-in failed (429)',
+    })
+  })
   it('maps HTTP failures and junk shapes to error', async () => {
     const httpFail = (async () => jsonResponse({}, 500)) as typeof fetch
     expect((await requestDeviceCode(httpFail)).status).toBe('error')
@@ -115,6 +143,22 @@ describe('pollForToken', () => {
       throw new Error('boom')
     }) as typeof fetch
     expect((await pollForToken('d', 1, { fetchFn: netFail, sleep: noSleep })).status).toBe('error')
+  })
+  it('surfaces an unrecognised GitHub error verbatim', async () => {
+    const odd = (async () =>
+      jsonResponse({ error: 'bad_verification_code', error_description: 'Wrong device code.' })) as typeof fetch
+    expect(await pollForToken('d', 1, { fetchFn: odd, sleep: noSleep })).toEqual({
+      status: 'error',
+      reason: 'Wrong device code.',
+    })
+  })
+  it('maps a non-JSON body to error rather than throwing', async () => {
+    const html = (async () =>
+      new Response('<html>maintenance</html>', { status: 503 })) as typeof fetch
+    expect(await pollForToken('d', 1, { fetchFn: html, sleep: noSleep })).toEqual({
+      status: 'error',
+      reason: 'GitHub sign-in failed (503)',
+    })
   })
 })
 
