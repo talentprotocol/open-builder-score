@@ -25,8 +25,10 @@ widget, percentile context.
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4) — standard runtime, but everything
-  meaningful is client-side (`"use client"`): no API routes, no server state. The
-  engine stays framework-free (`src/lib/engine.ts`).
+  meaningful is client-side (`"use client"`): no server state. The only server code is the
+  pair of stateless GitHub device-flow passthroughs under `/api/github/*`, which exist
+  solely because GitHub's device endpoints send no CORS headers. The engine stays
+  framework-free (`src/lib/engine.ts`).
 - [viem](https://viem.sh) for RPC, with Multicall3 batching
   (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on every chain)
 - RainbowKit + wagmi for wallet connection — needed only for the attest step; scoring
@@ -57,12 +59,17 @@ points = min(round(convert(value) * multiplier), max_score)
 - **Total score = Σ credential points.** For determinism, "now" and balances are taken at an
   as-of anchor (timestamp + block number) that also goes into the attestation.
 
-## POC credential set (weights = finalized 2025 season)
+## Credential set — 15 credentials, 196 points (spec 0.2.0)
 
 > The authoritative machine-readable versions live in `spec/spec.json` (weights + math)
 > and `spec/badge-registry.json` (contract addresses, extracted from production).
 
-### Tier 1 — RPC reads (in the POC)
+Every credential carries a `status`: `active` (scored), `excluded` (computable, deliberately
+not scored) or `deferred` (wanted, not computable yet). Multipliers are still the finalized
+2025 season's; the *set* is narrower. `/credentials` renders all three, so what's left out
+is as visible as what counts.
+
+### Onchain — RPC reads
 
 | slug | max | multiplier | conversion | calc | check |
 |---|---|---|---|---|---|
@@ -73,20 +80,33 @@ points = min(round(convert(value) * multiplier), max_score)
 | eth_global_finalist | 10 | 10.0 | none | max | 19 per-event finalist NFTs (Optimism) |
 | devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | distinct event SBTs (Base/Arb/Polygon) |
 | base_devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | 3 event SBTs (Base) |
-| base_learn | 13 | 1.0 | none | max | 13 completion SBTs (**Base Sepolia**) |
 | buidl_guidl_batches_graduate | 20 | 20.0 | none | max | 12 batch SBTs (OP + Arb) |
-| farcaster_farcon_nyc_2025_attendee | 12 | 12.0 | none | max | ticket NFT (Base) |
-| crypto_nomads_club | 12 | 12.0 | none | max | membership SBT (Ethereum) |
-| developer_dao_member | 8 | 0.02 | none | max | $CODE balance (Ethereum) |
-| talent_protocol_talent_holder | 8 | 0.03 | sqrt | sum | $TALENT balance (Base) |
-| talent_vault | 8 | 0.03 | sqrt | sum | `userBalanceMeta()` on vault (Base) |
 | talent_protocol_verified_builder | 20 | 20.0 | none | sum | EAS attestations (Base + Celo, via easscan GraphQL) |
 
-Plus one public-API credential in the POC: `buidl_guidl_speedrun_ethereum`
-(12 / 1.0 / none / max) — **not onchain**; it's BuidlGuidl's public API counting
-ACCEPTED challenges per wallet (verify CORS; defer if hostile).
+Plus one public-API credential: `buidl_guidl_speedrun_ethereum` (12 / 1.0 / none / max) —
+**not onchain**; it's BuidlGuidl's public API counting ACCEPTED challenges per wallet.
 
-### Deferred — needs token-metadata enumeration (post-POC)
+### Excluded — computable, deliberately not scored
+
+A Builder Score should measure building. These score attendance, membership, a buyable
+balance, or testnet activity, so they're carried in `spec.json` with `status: "excluded"`
+and a reason rather than deleted — the contracts stay documented and the cut stays legible.
+
+| slug | would-be max | why not |
+|---|---|---|
+| farcaster_farcon_nyc_2025_attendee | 12 | conference attendance is a ticket purchase |
+| crypto_nomads_club | 12 | community membership, not building |
+| developer_dao_member | 8 | a $CODE balance, buyable on the open market |
+| talent_protocol_talent_holder | 8 | a $TALENT balance — buyable, and our own token |
+| talent_vault | 8 | a $TALENT deposit — buyable, and our own token |
+| base_learn | 13 | completion SBTs live on Base Sepolia; testnet is cheap to farm |
+
+Dropping these took the ceiling from 257 to 196, and — because the scan's chain set is
+derived from the active RPC slugs — retired two whole chains: Ethereum went with CNC and
+$CODE, Base Sepolia with Base Learn. Four chains instead of six means fewer ways for a scan
+to come back incomplete, which is what gates attestation.
+
+### Deferred — needs token-metadata enumeration
 
 The "won" variants use the *same contracts* as participation but filter token metadata
 (`nft_type == "WINNER"`); Encode uses one contract with programme-type attributes:
@@ -101,11 +121,11 @@ The "won" variants use the *same contracts* as participation but filter token me
 
 `base_basecamp`'s two attendee SBTs are ERC-1155, and production reads them from its NFT
 indexer (`WalletNFT`/`TrackedNFT`), not RPC `balanceOf` (which reverts for 1155s) — it was
-mis-tiered as `rpc` in the original extraction; it needs token-id enumeration post-POC.
+mis-tiered as `rpc` in the original extraction; it needs token-id enumeration.
 
 Also skipped: `developer_dao_og` (historical balance at block 13612670).
 
-### Tier 3 — GitHub, unauthenticated (`kind: github`)
+### GitHub (`tier: github_public`)
 
 | slug | max | multiplier | conversion | calc | source |
 |---|---|---|---|---|---|
@@ -127,8 +147,8 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
 - [x] **1b. Scaffold** — Next.js 16 app via `create-next-app` ✅ (spec files get
       imported as JSON modules in phase 3).
 - [x] **3. Engine** — `src/lib/engine.ts`: pure `computeScore(inputs, spec) → {total, perCredential[]}`.
-      ✅ No DOM, no fetch, no framework imports; Vitest golden vectors (154/257 across the
-      21 POC credentials).
+      ✅ No DOM, no fetch, no framework imports; Vitest golden vectors (131/196 across the
+      15 active credentials).
 - [x] **4. Chain reads** — `src/lib/chains.ts` ✅: one Multicall3 round-trip per chain across
       6 chains, public RPC fallback lists, cross-chain count merging, per-chain failure
       isolation ("couldn't check" ≠ "not earned").
@@ -247,6 +267,18 @@ All three README-era unknowns were extracted from talent-api and live-verified (
    `any?` short-circuit means prod effectively only queries Base; this POC follows the spec
    and queries both.)
 
+## GitHub sign-in needs no secret
+
+Recurring question, so: the OAuth **device flow** has no client secret and no redirect URI
+by specification. There is nothing to configure locally and nothing to set in Vercel — the
+client ID is a public identifier and ships committed, exactly like the WalletConnect
+projectId. `NEXT_PUBLIC_GITHUB_CLIENT_ID` exists only to point the app at a different
+GitHub app without a code change; leave it unset and sign-in works.
+
+Signing in buys two things: it proves the GitHub handle going into a score is yours (the
+attest panel enforces the match), and it lifts the GitHub API limit from 60 to 5,000
+req/hr. The token is scope-less and lives in `sessionStorage`, so it dies with the tab.
+
 ## Ground rules
 
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.
@@ -254,3 +286,10 @@ All three README-era unknowns were extracted from talent-api and live-verified (
   carry the version they were computed with.
 - Zero secrets in the repo, zero server-side state. If a feature needs a backend, it's out
   of scope for this repo (except, later, one stateless CORS/token worker for GitHub sign-in).
+- **Wallet ownership is proved by the attestation, not by SIWE.** Anyone may score any
+  address — that's the point of an open score — but attesting requires the connected wallet
+  to *be* the scored wallet. EAS records the attester as `msg.sender`, so the transaction
+  itself is the proof and anyone can check it afterwards by comparing `attester` to the
+  attested `wallet` (`isSelfAttested` in `src/lib/verify.ts`, surfaced on the verify screen).
+  A SIWE `personal_sign` would add a ceremony whose result only the signer's own browser
+  could ever validate, which in an app with no backend proves nothing to a third party.
