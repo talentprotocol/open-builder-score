@@ -1,16 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import specJson from '../spec/spec.json'
 import registryJson from '../spec/badge-registry.json'
-import type { Spec, Registry } from '@/lib/types'
+import badgeSpecJson from '../spec/badges.json'
+import type { Spec, Registry, BadgeSpec } from '@/lib/types'
 
 const spec = specJson as Spec
 const registry = registryJson as unknown as Registry
+const badgeSpec = badgeSpecJson as BadgeSpec
 
 const pocSlugs = spec.credentials.filter((c) => c.poc).map((c) => c.slug)
 
 describe('spec.json', () => {
   it('has 21 POC credentials', () => {
     expect(pocSlugs).toHaveLength(21)
+  })
+
+  // Pinned so that adding a badge can never quietly widen the score. Badges
+  // are zero-point; if this number moves, something entered the scoring
+  // contract that should not have.
+  it('still tops out at 257 points', () => {
+    const maxTotal = spec.credentials
+      .filter((c) => c.poc)
+      .reduce((sum, c) => sum + c.max_score, 0)
+    expect(maxTotal).toBe(257)
   })
 
   it('uses only known conversions and calculations', () => {
@@ -57,6 +69,15 @@ describe('badge-registry.json', () => {
       result_index: 0,
       divide_by: '1e18',
     })
+  })
+
+  it('keeps badge slugs distinct from credential slugs', () => {
+    // Both render as `id={slug}` anchors on /credentials, and a collision
+    // would silently point the deep link at the wrong card.
+    const credentialSlugs = new Set(spec.credentials.map((c) => c.slug))
+    for (const badge of badgeSpec.badges) {
+      expect(credentialSlugs.has(badge.slug), `${badge.slug} collides`).toBe(false)
+    }
   })
 
   it('has the verified_builder schema uid on base+celo', () => {

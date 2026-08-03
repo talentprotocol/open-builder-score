@@ -13,7 +13,9 @@ import { authorizedFetch } from '@/lib/github-auth'
 import { useGithubAuth } from '@/components/use-github-auth'
 import type { Spec } from '@/lib/types'
 import { credentialsPath, inputPath, scorePath } from '@/lib/routes'
+import { evaluateBadges, gatherBadges } from '@/lib/badges'
 import { CredentialCard } from '@/components/credential-card'
+import { BadgeStrip } from '@/components/badge-strip'
 import { AttestPanel } from '@/components/attest-panel'
 import { AttestationHistory } from '@/components/attestation-history'
 import { CopyLinkButton } from '@/components/copy-link-button'
@@ -27,18 +29,23 @@ import { SweepOverlay } from '@/components/motion/sweep-overlay'
 
 const spec = specJson as Spec
 
-const SOURCE_LABELS: Record<GatherSource, string> = {
+// 'badges' is not a GatherSource: badges are gathered outside the scoring
+// pipeline so the verify screen, which recomputes a score, never fetches them.
+type ScanSource = GatherSource | 'badges'
+
+const SOURCE_LABELS: Record<ScanSource, string> = {
   chains: 'Onchain badges & balances (6 chains)',
   github: 'GitHub',
   speedrun: 'SpeedRun Ethereum',
   verifiedBuilder: 'EAS attestations',
+  badges: 'Achievement badges',
 }
 
-const SOURCES = Object.keys(SOURCE_LABELS) as GatherSource[]
+const SOURCES = Object.keys(SOURCE_LABELS) as ScanSource[]
 
 type State =
   | { phase: 'resolving' }
-  | { phase: 'loading'; settled: GatherSource[] }
+  | { phase: 'loading'; settled: ScanSource[] }
   | { phase: 'error'; message: string }
   | { phase: 'done'; scored: Scored }
 
@@ -150,19 +157,22 @@ export default function ResultsPage({
         const fetchers = auth
           ? { github: (handle: string | null) => readGithubCredentials(handle, authorizedFetch(auth.token)) }
           : {}
-        const gather = await gatherMultiInputs(
-          [address, ...extraAddresses],
-          githubHandle,
-          fetchers,
-          (source) => {
-            if (cancelled) return
-            setState((prev) =>
-              prev.phase === 'loading'
-                ? { phase: 'loading', settled: [...prev.settled, source] }
-                : prev,
-            )
-          },
-        )
+        const settle = (source: ScanSource) => {
+          if (cancelled) return
+          setState((prev) =>
+            prev.phase === 'loading'
+              ? { phase: 'loading', settled: [...prev.settled, source] }
+              : prev,
+          )
+        }
+        const [gather, badges] = await Promise.all([
+          gatherMultiInputs([address, ...extraAddresses], githubHandle, fetchers, settle),
+          // Badges must never take the score down with them: an unexpected
+          // throw degrades to "couldn't check", not an error screen.
+          gatherBadges([address, ...extraAddresses])
+            .catch(() => evaluateBadges({}))
+            .finally(() => settle('badges')),
+        ])
         if (cancelled) return
         setState({
           phase: 'done',
@@ -172,6 +182,7 @@ export default function ResultsPage({
             address,
             githubHandle,
             extraAddresses,
+            badges,
           },
         })
       } catch {
@@ -289,6 +300,10 @@ export default function ResultsPage({
           </FadeRise>
 
           <ScorePercentile score={state.scored.score.total} />
+
+          <FadeRise delay={0.1}>
+            <BadgeStrip badges={state.scored.badges} />
+          </FadeRise>
 
           <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {state.scored.score.perCredential.map((result) => (

@@ -149,6 +149,91 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       public client ID. Deployed via `vercel deploy --prod` from local `main`
       (no git integration yet — redeploys are manual).
 
+## Badges
+
+Zero-point achievements shown beside the score, defined in `spec/badges.json`. They add no
+points, so they cannot move a total, change `ScoreResult.complete`, or alter what an
+attestation says — and the verifier screen ignores them entirely, since a snapshot cannot be
+re-derived at an as-of anchor.
+
+| badge | source | how it's checked |
+|---|---|---|
+| $BUILD Contributor | live RPC **+** dated snapshot | `donated(address) > 0` on Base `0x556e…FdB7`, **or** a BUILD pay-it-forward donation |
+| Launched a Talent Token | onchain history, frozen | membership in the v1 TalentFactory's `TalentCreated` history — Celo `0xa902…8246` + Polygon `0xa91b…fde0`, 564 wallets |
+| Builder Score 100+ | dated snapshot | membership in an export from Talent Protocol |
+| Earned Builder Rewards | dated snapshot | membership in an export from Talent Protocol |
+
+A badge can carry more than one check, OR-ed: earned by any one is earned. `$BUILD
+Contributor` uses two, because `DataPoints::BuildContribution` reads the BUILD airdrop
+database *first* and only falls back to `donated()` — an allocation recorded there,
+especially one on a custody wallet rather than the wallet a user would type in, is invisible
+to the live read. That database is gone (`BUILD_DATABASE_URL` points at a Supabase project
+that no longer resolves, matching `build_contribution` being marked Remove in the 2025
+credential set), so the snapshot exports **`build_pay_forward_wallets`** instead — the
+donors who gave their BUILD allocation away. Both sides of each pair ship, because the
+donation sits on the custody wallet and custody wallets are not linked accounts, so that
+table is the only place they come from.
+
+Neither check subsumes the other: `donated()` records direct donations to the contract,
+while pay-it-forward donations were recorded in the BUILD database. Sampling the export
+against the contract, roughly a third of these wallets also show a non-zero `donated()` —
+so the two overlap without either being complete.
+
+The export also reads the stored `build_contribution` data point, but that population is
+**empty**: the credential row was deleted when it was retired, and `Credential has_many
+:data_points, dependent: :destroy` took the values with it. The query stays for the day it
+comes back.
+
+The snapshots are exported **profile-wide**: every EVM wallet on a qualifying profile, not
+just the one the record sits on. A badge is a fact about a person, so whichever of their
+wallets they enter should match.
+
+**Why the Talent Token badge is not a live read.** The obvious call is
+`talentsToTokens(wallet)` on the factory, and on Polygon it works. On Celo it does not: that
+older deployment never populated the talent → token direction, so it returns `0x0` even for
+wallets whose `createTalent` succeeded, and `hasTalentToken` reverts outright. Only
+`tokensToTalents(token)` answers there, which cannot be asked from a wallet address. Polygon
+holds 20 of the 564 talents, so a live read would have quietly missed the entire Celo
+cohort. Both factories have been dormant since July 2023 and v1 is closed, so the set is
+frozen and shipped as data — still public and reproducible, unlike the two snapshots below:
+
+```sh
+node scripts/build-talent-token-allowlist.mjs   # rebuilds spec/allowlists/talent-token-launched.json
+```
+
+The two snapshot badges have no permissionless source at all. Builder Score lives in Talent
+Protocol's database, and rewards are paid from a per-grant wallet through a per-grant
+multisend contract, so there is no stable distributor address to check. They ship as a dated
+export, and the UI labels them as such.
+
+Regenerating the snapshots, from the bastion:
+
+```sh
+cd ../talent-api/terraform
+./obs_badge_export            # writes ../../open-builder-score/exports/*.txt
+cd -
+node scripts/build-snapshots.mjs
+```
+
+`obs_badge_export` streams the export back over ssh rather than writing a file on the
+bastion and copying it: `dr` runs `docker run -it --rm` with no volume mounts, so anything
+the script writes inside the container dies with it, and the image is the deployed build —
+it won't contain `script/export_obs_badge_snapshots.rb` until that branch ships. Piping the
+script in on stdin and capturing stdout sidesteps both. The same script also runs the
+ordinary way anywhere with a filesystem worth writing to:
+
+```sh
+bundle exec rails runner script/export_obs_badge_snapshots.rb tmp/obs_badge_snapshots
+cp ../talent-api/tmp/obs_badge_snapshots/*.txt exports/
+```
+
+That writes 256 shards per badge under `public/snapshots/<slug>/` — keyed by the first byte
+of the address, so the client fetches one small file rather than a multi-MB list — and
+updates `spec/snapshots.json` with the export date shown in the UI. Empty shards are written
+too: the client reads a 404 as "couldn't check", so a missing shard has to mean a broken
+deploy, never "not earned". Until the first export lands, `generated_at` is `null` and both
+snapshot badges honestly render as unavailable.
+
 ## Resolved lookups
 
 All three README-era unknowns were extracted from talent-api and live-verified (CORS open):

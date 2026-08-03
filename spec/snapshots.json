@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-07-31",
+  "source": "talent-api script/export_obs_badge_snapshots.rb",
+  "shards": 256,
+  "badges": {
+    "builder_score_100": {
+      "count": 27477,
+      "threshold": 100
+    },
+    "builder_rewards_earned": {
+      "count": 13578
+    },
+    "build_contributor": {
+      "count": 21458
+    }
+  }
+}

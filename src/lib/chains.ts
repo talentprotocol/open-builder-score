@@ -6,7 +6,7 @@ import {
   type Chain,
   type PublicClient,
 } from 'viem'
-import { arbitrum, base, baseSepolia, mainnet, optimism, polygon } from 'viem/chains'
+import { arbitrum, base, baseSepolia, celo, mainnet, optimism, polygon } from 'viem/chains'
 import registryJson from '../../spec/badge-registry.json'
 import type { CredentialInput, Registry } from './types'
 
@@ -37,17 +37,25 @@ const VAULT_ABI = parseAbi([
 ])
 
 // Public endpoints only — no API keys anywhere (README ground rule).
-const CHAIN_CONFIG: Record<number, { chain: Chain; rpcUrls: string[] }> = {
+// Celo carries no scored credential — it is here for the Talent Token badge,
+// and because talent_protocol_verified_builder reaches Celo through easscan's
+// GraphQL rather than RPC.
+export const CHAIN_CONFIG: Record<number, { chain: Chain; rpcUrls: string[] }> = {
   1: { chain: mainnet, rpcUrls: ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com', 'https://1rpc.io/eth', 'https://eth.drpc.org'] },
   10: { chain: optimism, rpcUrls: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com', 'https://1rpc.io/op', 'https://optimism.drpc.org'] },
   137: { chain: polygon, rpcUrls: ['https://polygon-rpc.com', 'https://polygon-bor-rpc.publicnode.com', 'https://1rpc.io/matic', 'https://polygon.drpc.org'] },
   42161: { chain: arbitrum, rpcUrls: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com', 'https://1rpc.io/arb', 'https://arbitrum.drpc.org'] },
   8453: { chain: base, rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://1rpc.io/base', 'https://base.drpc.org'] },
   84532: { chain: baseSepolia, rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com', 'https://base-sepolia.drpc.org'] },
+  42220: { chain: celo, rpcUrls: ['https://forno.celo.org', 'https://celo.drpc.org', 'https://rpc.ankr.com/celo'] },
 }
 
 // Reused by src/lib/ens.ts for mainnet ENS resolution.
 export const MAINNET_RPC_URLS = CHAIN_CONFIG[1].rpcUrls
+
+// Chain-name → chain-id map, single-sourced from the registry so badges and
+// credentials can never disagree about what "celo-mainnet" means.
+export const CHAIN_IDS: Record<string, number> = registry.chains
 
 export function buildChainPlan(reg: Registry, pocRpcSlugs: Set<string>): ChainPlan[] {
   const byChain = new Map<number, PlannedRead[]>()
@@ -142,7 +150,7 @@ export function mergeChainValues(
   return merged
 }
 
-function clientFor(chainId: number): PublicClient {
+export function clientFor(chainId: number): PublicClient {
   const config = CHAIN_CONFIG[chainId]
   return createPublicClient({
     chain: config.chain,
