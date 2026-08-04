@@ -66,8 +66,9 @@ points = min(round(convert(value) * multiplier), max_score)
 
 Every credential carries a `status`: `active` (scored), `excluded` (computable, deliberately
 not scored) or `deferred` (wanted, not computable yet). Multipliers are still the finalized
-2025 season's; the *set* is narrower. `/credentials` renders all three, so what's left out
-is as visible as what counts.
+2025 season's; the *set* is narrower. `/credentials` renders the scored set plus `deferred`,
+so the points the POC cannot yet reach stay visible. The `excluded` ones keep their
+`status_reason` in `spec.json` but are no longer argued on the page.
 
 ### Onchain — RPC reads
 

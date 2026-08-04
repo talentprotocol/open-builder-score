@@ -19,9 +19,10 @@ const EVM = /^0x[0-9a-f]{40}$/
 const BADGES = [
   { slug: 'builder_score_100', file: 'builder_score_100.txt', threshold: 100 },
   { slug: 'builder_rewards_earned', file: 'builder_rewards_earned.txt' },
-  // Second check for a badge that also reads onchain — the stored
-  // build_contribution data point holds what donated() cannot see.
-  { slug: 'build_contributor', file: 'build_contributor.txt' },
+  // build_contributor is deliberately absent: $BUILD reads donated() live.
+  // The export missed direct donors, because the only branch that saw them
+  // was the build_contribution data point and that credential was retired.
+  // Re-add it here only once that data point is back.
 ]
 
 function arg(name, fallback) {

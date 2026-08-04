@@ -2,8 +2,6 @@ import type { Metadata } from 'next'
 import specJson from '../../../spec/spec.json'
 import type { Spec } from '@/lib/types'
 import {
-  badgeSourceLabel,
-  describeBadgeCheck,
   describeCalculation,
   describeValue,
   displayNote,
@@ -12,8 +10,8 @@ import {
   statusReason,
   uncountedCredentials,
 } from '@/lib/credential-reference'
-import { badgeDefinitions } from '@/lib/badges'
-import { snapshotMeta } from '@/lib/snapshots'
+import Link from 'next/link'
+import { badgesPath } from '@/lib/routes'
 import { Badge } from '@/components/ui/badge'
 import { PingDot } from '@/components/motion/ping-dot'
 import { FadeRise } from '@/components/motion/fade-rise'
@@ -22,7 +20,11 @@ const spec = specJson as Spec
 const groups = groupCredentials(spec)
 const credentialCount = groups.reduce((n, g) => n + g.credentials.length, 0)
 const maxTotal = groups.reduce((n, g) => n + g.maxTotal, 0)
-const uncounted = uncountedCredentials(spec)
+// Only the deferred group renders. The excluded credentials are an editorial
+// position, not a gap in the score — spec.json still carries them with their
+// status_reason, and uncountedCredentials still reports them, but the page no
+// longer argues the case.
+const uncounted = uncountedCredentials(spec).filter((g) => g.status === 'deferred')
 
 export const metadata: Metadata = {
   title: 'Builder Score credentials — Open Builder Score',
@@ -38,6 +40,12 @@ export default function CredentialsPage() {
           Every point in a Builder Score comes from one of these {credentialCount} credentials —{' '}
           <span className="font-mono tabular-nums">{maxTotal}</span> max points. Same inputs, same
           score, for anyone.
+        </p>
+        <p className="text-base text-muted-foreground">
+          <Link href={badgesPath()} className="underline hover:text-foreground">
+            Badges
+          </Link>{' '}
+          live on their own page. They carry no points, so they are not part of this total.
         </p>
       </FadeRise>
 
@@ -81,53 +89,6 @@ export default function CredentialsPage() {
           </section>
         </FadeRise>
       ))}
-
-      <FadeRise whileInView>
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              <PingDot settled /> Badges
-            </h2>
-            <span className="font-mono text-xs tracking-[0.18em] text-muted-foreground/70">
-              0 PTS
-            </span>
-          </div>
-          <p className="text-base text-muted-foreground">
-            Achievements shown next to a score without entering it. They add no points, so they
-            cannot change a total or what an attestation says
-            {snapshotMeta.generated_at
-              ? `. Snapshot badges come from an export dated ${snapshotMeta.generated_at}`
-              : ''}
-            .
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {badgeDefinitions.map((badge) => (
-              <article
-                key={badge.slug}
-                id={badge.slug}
-                className="flex scroll-mt-16 flex-col gap-1 rounded-lg border bg-card p-4 shadow-xs target:ring-1 target:ring-success/60 dark:bg-card/50"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-base font-medium">{badge.name}</h3>
-                  <span className="shrink-0 font-mono text-base tabular-nums tracking-tighter">
-                    0 pts
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">{badge.description}</p>
-                <p className="font-mono text-sm text-muted-foreground/80">
-                  {describeBadgeCheck(badge)}
-                </p>
-                <Badge compact className="mt-1">
-                  {badgeSourceLabel(badge)}
-                </Badge>
-                {badge.notes && (
-                  <p className="text-sm text-muted-foreground/80">{badge.notes}</p>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      </FadeRise>
 
       {uncounted.map((group) => (
         <FadeRise whileInView key={group.status}>

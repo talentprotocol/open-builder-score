@@ -34,11 +34,12 @@ function cred(over: Partial<SpecCredential>): SpecCredential {
 }
 
 describe('groupCredentials', () => {
-  it('returns the four scan sources in scan order', () => {
+  it('returns the five scan sources in scan order', () => {
     const groups = groupCredentials(spec)
-    expect(groups.map((g) => g.key)).toEqual(['chains', 'github', 'speedrun', 'verifiedBuilder'])
+    expect(groups.map((g) => g.key)).toEqual(['chains', 'nftCredentials', 'github', 'speedrun', 'verifiedBuilder'])
     expect(groups.map((g) => g.label)).toEqual([
       'Onchain badges & balances',
+      'Hackathon & event NFTs',
       'GitHub',
       'SpeedRun Ethereum',
       'EAS attestations',

@@ -58,3 +58,10 @@ export function verifyWalletPath(wallet: string): string {
 export function credentialsPath(slug: string | null = null): string {
   return slug ? `/credentials#${slug}` : '/credentials'
 }
+
+// Badges get their own page rather than a section of the credential
+// reference: they carry no points, so filing them under the document that
+// explains where points come from misstates what they are.
+export function badgesPath(slug: string | null = null): string {
+  return slug ? `/badges#${slug}` : '/badges'
+}

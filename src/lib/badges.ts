@@ -143,6 +143,18 @@ export interface AttestedBadge {
   evidence: BadgeEvidence
 }
 
+/**
+ * How strongly a badge can be checked, from its declared checks alone. The
+ * results screen knows no more than a verifier does: gatherBadges ORs a
+ * badge's checks together and keeps no record of which one fired, so a badge
+ * that *can* rest on an export is classified as if it did.
+ */
+export function badgeEvidence(badge: BadgeDefinition): BadgeEvidence {
+  const permissionless = badgeChecks(badge).filter((c) => c !== 'snapshot')
+  if (permissionless.length === 0) return 'export'
+  return usesSnapshot(badge) ? 'mixed' : 'public'
+}
+
 export function classifyAttestedBadges(
   slugs: string[],
   spec: BadgeSpec = badgeSpec,
@@ -152,11 +164,6 @@ export function classifyAttestedBadges(
     // An unknown slug stays visible, classified at the cautious end: hiding it
     // would understate the claim, and assuming it public would overstate it.
     if (!def) return { slug, name: slug, evidence: 'export' as const }
-
-    const checks = badgeChecks(def)
-    const permissionless = checks.filter((c) => c !== 'snapshot')
-    const evidence: BadgeEvidence =
-      permissionless.length === 0 ? 'export' : usesSnapshot(def) ? 'mixed' : 'public'
-    return { slug, name: def.name, evidence }
+    return { slug, name: def.name, evidence: badgeEvidence(def) }
   })
 }

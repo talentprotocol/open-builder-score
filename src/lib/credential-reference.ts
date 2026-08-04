@@ -4,17 +4,22 @@
 // spec edit fails the tests instead of shipping a wrong page.
 
 import registryJson from '../../spec/badge-registry.json'
-import { badgeChecks } from './badges'
-import type { BadgeCheck, BadgeDefinition, Registry, Spec, SpecCredential } from './types'
+import nftManifestJson from '../../spec/nft-credentials.json'
+import type { Registry, Spec, SpecCredential } from './types'
 
 const registry = registryJson as unknown as Registry
 
 export interface CredentialGroup {
-  key: 'chains' | 'github' | 'speedrun' | 'verifiedBuilder'
+  key: 'chains' | 'nftCredentials' | 'github' | 'speedrun' | 'verifiedBuilder'
   label: string
   credentials: SpecCredential[]
   maxTotal: number
 }
+
+// The group is defined by what the generated allowlist actually carries, not
+// by tier: `indexed` also covers talent_protocol_verified_builder, which has
+// its own group and would otherwise be counted in both.
+const NFT_SLUGS = new Set(Object.keys(nftManifestJson.credentials))
 
 const SPEEDRUN_SLUG = 'buidl_guidl_speedrun_ethereum'
 const EAS_SLUG = 'talent_protocol_verified_builder'
@@ -32,8 +37,21 @@ export function groupCredentials(spec: Spec): CredentialGroup[] {
       // coverage test enforces it). A positive tier filter would silently drop
       // a newly activated credential on an unlisted tier.
       credentials: active.filter(
-        (c) => c.tier !== 'github_public' && c.slug !== SPEEDRUN_SLUG && c.slug !== EAS_SLUG,
+        (c) =>
+          c.tier !== 'github_public' &&
+          !NFT_SLUGS.has(c.slug) &&
+          c.slug !== SPEEDRUN_SLUG &&
+          c.slug !== EAS_SLUG,
       ),
+    },
+    {
+      // Read from a generated allowlist, not a live call — the metadata and
+      // ERC-1155 enumeration behind these cost more than a browser can spend
+      // per wallet. Public chain data all the same: the generator is shipped
+      // and anyone can re-run it.
+      key: 'nftCredentials',
+      label: 'Hackathon & event NFTs',
+      credentials: active.filter((c) => NFT_SLUGS.has(c.slug)),
     },
     { key: 'github', label: 'GitHub', credentials: active.filter((c) => c.tier === 'github_public') },
     {
@@ -136,6 +154,7 @@ function generalConverted(conversion: string): string {
 const VALUE_DESCRIPTIONS: Record<string, string> = {
   nft_count: 'badges held',
   distinct_contracts_owned: 'distinct qualifying contracts held',
+  distinct_contracts_with_winner_token: 'hackathons won (distinct contracts holding a winner token)',
   erc20_balance_whole_tokens: 'token balance (whole tokens)',
   contract_call: 'vault balance',
   distinct_attesters: 'distinct attesters',
@@ -176,52 +195,4 @@ const DISPLAY_NOTES: Record<string, string> = {
 
 export function displayNote(c: SpecCredential): string | null {
   return DISPLAY_NOTES[c.slug] ?? null
-}
-
-// Badges are documented on the same page but are not a fifth CredentialGroup:
-// they carry no points, so they never enter the group/maxTotal accounting.
-const CHECK_DESCRIPTIONS: Record<BadgeCheck, string> = {
-  snapshot: 'Membership in a dated export from Talent Protocol.',
-  allowlist: 'Membership in a frozen set rebuilt from public chain history.',
-  rpc: '', // built per badge from its call + chains
-}
-
-function describeRpcCheck(badge: BadgeDefinition): string {
-  if (!badge.call || !badge.contracts) {
-    throw new Error(`rpc badge ${badge.slug} needs a call and contracts to describe`)
-  }
-  const chains = badge.contracts.map((c) => CHAIN_LABELS[c.chain] ?? c.chain).join(' and ')
-  return `Live read of ${badge.call} on ${chains}.`
-}
-
-// Every check a badge runs, spelled out. Badges with two of them say so —
-// hiding the second would misrepresent where an earned badge came from.
-export function describeBadgeCheck(badge: BadgeDefinition): string {
-  const checks = badgeChecks(badge)
-  if (checks.length === 0) return 'No check configured.'
-  return checks
-    .map((check) => (check === 'rpc' ? describeRpcCheck(badge) : CHECK_DESCRIPTIONS[check]))
-    .join(' ')
-}
-
-const CHECK_LABELS: Record<BadgeCheck, string> = {
-  rpc: 'live onchain read',
-  allowlist: 'onchain history, frozen',
-  snapshot: 'dated snapshot',
-}
-
-export function badgeSourceLabel(badge: BadgeDefinition): string {
-  const checks = badgeChecks(badge)
-  if (checks.length === 0) return 'not configured'
-  return checks.map((check) => CHECK_LABELS[check]).join(' + ')
-}
-
-const CHAIN_LABELS: Record<string, string> = {
-  'eth-mainnet': 'Ethereum',
-  'opt-mainnet': 'Optimism',
-  'polygon-mainnet': 'Polygon',
-  'arb-mainnet': 'Arbitrum',
-  'base-mainnet': 'Base',
-  'base-sepolia': 'Base Sepolia',
-  'celo-mainnet': 'Celo',
 }

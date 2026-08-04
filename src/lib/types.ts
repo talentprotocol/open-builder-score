@@ -134,6 +134,24 @@ export interface BadgeResult {
   asOf?: string | null          // snapshot badges only — the export date
 }
 
+export interface NftCredentialManifest {
+  generated_at: string
+  source: string
+  generator: string
+  frozen_because: string
+  shards: number
+  credentials: Record<
+    string,
+    {
+      unit: string
+      wallets: number
+      tokens_scanned: number
+      incomplete?: { address: string; chain: string; swept: number; holders: number }[]
+      contracts: Record<string, { chain: string; tokens: number; owners?: number; source?: string; skipped?: string }>
+    }
+  >
+}
+
 export interface SnapshotMeta {
   generated_at: string | null   // null until the first export is published
   source: string

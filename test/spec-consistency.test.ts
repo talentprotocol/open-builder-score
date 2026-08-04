@@ -11,18 +11,20 @@ const badgeSpec = badgeSpecJson as BadgeSpec
 const activeSlugs = spec.credentials.filter((c) => c.status === 'active').map((c) => c.slug)
 
 describe('spec.json', () => {
-  it('has 15 active credentials', () => {
-    expect(activeSlugs).toHaveLength(15)
+  it('has 18 active credentials', () => {
+    expect(activeSlugs).toHaveLength(18)
   })
 
   // Pinned so that adding a badge can never quietly widen the score. Badges
   // are zero-point; if this number moves, something entered the scoring
-  // contract that should not have.
-  it('still tops out at 196 points', () => {
+  // contract that should not have. It last moved from 196 to 276 when the
+  // three NFT-metadata credentials stopped being deferred — 80 points that
+  // needed an allowlist rebuilt from chain data before they could be scored.
+  it('still tops out at 276 points', () => {
     const maxTotal = spec.credentials
       .filter((c) => c.status === 'active')
       .reduce((sum, c) => sum + c.max_score, 0)
-    expect(maxTotal).toBe(196)
+    expect(maxTotal).toBe(276)
   })
 
   // Pinned so that re-admitting one of these is a deliberate edit rather than

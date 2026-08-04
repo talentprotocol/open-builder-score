@@ -23,6 +23,10 @@ const goldenValues: Record<string, CredentialInput> = {
   buidl_guidl_speedrun_ethereum: ok(4),        // 4×1                   = 4
   buidl_guidl_batches_graduate: ok(1),         // 1×20                  = 20
   talent_protocol_verified_builder: ok(2),     // 2×20=40→20            = 20
+  // Read from the generated allowlist rather than a live call.
+  devfolio_hackathons_won: ok(4),              // sqrt(4)=2 ×15         = 30
+  base_devfolio_hackathons_won: ok(1),         // sqrt(1)=1 ×15         = 15
+  base_basecamp: ok(2),                        // 2×20=40→20            = 20
   // Excluded — scored 7/12/0/3/1/0 = 23 points before the re-cut, 0 now.
   base_learn: ok(7),
   farcaster_farcon_nyc_2025_attendee: ok(1),
@@ -55,10 +59,10 @@ describe('convert', () => {
 describe('computeScore — golden vector', () => {
   const result = computeScore({ computedAt: NOW, values: goldenValues }, spec)
 
-  it('total is 131', () => expect(result.total).toBe(131))
-  it('maxTotal is 196', () => expect(result.maxTotal).toBe(196))
+  it('total is 196', () => expect(result.total).toBe(196))
+  it('maxTotal is 196', () => expect(result.maxTotal).toBe(276))
   it('is complete', () => expect(result.complete).toBe(true))
-  it('covers all 15 active credentials', () => expect(result.perCredential).toHaveLength(15))
+  it('covers all 15 active credentials', () => expect(result.perCredential).toHaveLength(18))
 
   const points = Object.fromEntries(result.perCredential.map((r) => [r.slug, r.points]))
   it.each([
@@ -134,7 +138,7 @@ describe('computeScore — unavailable propagation', () => {
   }
   const result = computeScore({ computedAt: NOW, values }, spec)
 
-  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(131))
+  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(196))
   it('marks the result incomplete', () => expect(result.complete).toBe(false))
   it('carries the reason', () => {
     const pioneer = result.perCredential.find((r) => r.slug === 'eth_global_pioneer')!
@@ -155,7 +159,7 @@ describe('computeScore — unavailable propagation', () => {
       spec,
     )
     expect(r.complete).toBe(true)
-    expect(r.total).toBe(131)
+    expect(r.total).toBe(196)
   })
 
   it('treats a missing slug as unavailable', () => {

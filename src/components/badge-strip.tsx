@@ -1,31 +1,25 @@
 import Link from 'next/link'
 import type { BadgeResult } from '@/lib/types'
-import { credentialsPath } from '@/lib/routes'
+import { badgesPath } from '@/lib/routes'
 
-const pillStyles: Record<BadgeResult['state'], string> = {
-  earned: 'border-success/30 bg-success/10 text-foreground',
-  not_earned: 'border-border bg-card text-muted-foreground opacity-70 dark:bg-card/50',
-  unavailable: 'border-warning/30 bg-warning/10 text-warning-text',
-}
-
-const dotStyles: Record<BadgeResult['state'], string> = {
+// State is the only thing this strip says. How a badge is checked — and how
+// strongly — is a question with a long answer, so it lives on /badges rather
+// than being compressed into a column here.
+const markStyles: Record<BadgeResult['state'], string> = {
   earned: 'bg-success',
-  not_earned: 'bg-muted-foreground/40',
+  not_earned: 'border border-muted-foreground/50',
   unavailable: 'bg-warning',
 }
 
-function pillTitle(badge: BadgeResult): string {
-  if (badge.state === 'unavailable') return `Couldn't check: ${badge.unavailableReason}`
-  return badge.description
+const stateLabels: Record<BadgeResult['state'], string> = {
+  earned: 'Earned',
+  not_earned: 'Not earned',
+  unavailable: 'Could not be checked',
 }
 
 export function BadgeStrip({ badges }: { badges: BadgeResult[] }) {
   if (badges.length === 0) return null
-  // Snapshot badges are read from a dated export, not recomputed live. That
-  // difference is the one thing this strip must not blur.
-  // asOf is set by evaluateBadges on any badge that consults a snapshot, which
-  // is not the same as a badge whose primary source is one.
-  const asOf = badges.find((b) => b.asOf)?.asOf
+  const earned = badges.filter((b) => b.state === 'earned').length
 
   return (
     <section className="flex flex-col gap-2">
@@ -33,34 +27,47 @@ export function BadgeStrip({ badges }: { badges: BadgeResult[] }) {
         <h2 className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
           Badges
         </h2>
-        <span className="font-mono text-xs tracking-[0.18em] text-muted-foreground/70">0 PTS</span>
+        <span className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
+          {earned} of {badges.length} earned
+        </span>
       </div>
-      <ul className="flex flex-wrap gap-2">
+
+      <ul className="divide-y divide-border border-y border-border">
         {badges.map((badge) => (
           <li key={badge.slug}>
-            <span
-              title={pillTitle(badge)}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${pillStyles[badge.state]}`}
+            <Link
+              href={badgesPath(badge.slug)}
+              title={
+                badge.state === 'unavailable'
+                  ? `Couldn't check: ${badge.unavailableReason}`
+                  : badge.description
+              }
+              className="flex items-baseline gap-3 px-3 py-2.5 transition-colors hover:bg-accent/40"
             >
+              <span className="flex h-[1.3125rem] shrink-0 items-center">
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 rotate-45 ${markStyles[badge.state]}`}
+                />
+              </span>
               <span
-                aria-hidden
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotStyles[badge.state]}`}
-              />
-              {badge.name}
-              {badge.source === 'snapshot' && (
-                <span className="font-mono text-xs text-muted-foreground/70">snapshot</span>
-              )}
-              {badge.source !== 'snapshot' && badge.asOf && (
-                <span className="font-mono text-xs text-muted-foreground/70">+ snapshot</span>
-              )}
-            </span>
+                className={`truncate ${
+                  badge.state === 'earned'
+                    ? 'font-medium text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {badge.name}
+                <span className="sr-only"> — {stateLabels[badge.state]}.</span>
+              </span>
+            </Link>
           </li>
         ))}
       </ul>
+
       <p className="text-sm text-muted-foreground/70">
-        Badges carry no points and never affect the score or the attestation.{' '}
-        {asOf && `Snapshot badges are read from an export dated ${asOf}. `}
-        <Link href={credentialsPath()} className="underline hover:text-foreground">
+        No points — badges never affect the score or the attestation.{' '}
+        <Link href={badgesPath()} className="underline hover:text-foreground">
           How each one is checked →
         </Link>
       </p>
