@@ -1,14 +1,29 @@
 import { decodeAbiParameters, getAddress, parseAbiParameters } from 'viem'
 import specJson from '../../spec/spec.json'
-import { ATTEST_SCHEMA, ATTEST_SCHEMA_UID, EASSCAN_SITE } from './eas'
+import {
+  ATTEST_AGGREGATE_LEGACY_SCHEMA,
+  ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
+  ATTEST_AGGREGATE_SCORE_URL_SCHEMA,
+  ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID,
+  ATTEST_AGGREGATE_SCHEMA,
+  ATTEST_AGGREGATE_SCHEMA_UID,
+  ATTEST_SCHEMA,
+  ATTEST_SCHEMA_UID,
+  EASSCAN_SITE,
+  KNOWN_SCHEMA_UIDS,
+} from './eas'
+import { MAX_EXTRA_WALLETS } from './ownership'
 import type { ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
 
 export const EASSCAN_GRAPHQL = `${EASSCAN_SITE}/graphql`
 
-// Derived from the canonical schema string so the decoder can never drift from eas.ts.
+// Derived from the canonical schema strings so the decoder can never drift from eas.ts.
 const SCHEMA_PARAMS = parseAbiParameters(ATTEST_SCHEMA)
+const AGGREGATE_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCHEMA)
+const AGGREGATE_LEGACY_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_LEGACY_SCHEMA)
+const AGGREGATE_SCORE_URL_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCORE_URL_SCHEMA)
 
 export const ATTESTATION_QUERY = `query($id: String!) {
   attestation(where: { id: $id }) {
@@ -33,12 +48,22 @@ export interface OnchainAttestation {
 }
 
 export interface DecodedScoreAttestation {
+  /** 1 = single wallet, 2 = aggregate. */
+  version: 1 | 2
   specVersion: string
+  /** The primary wallet. EAS records the attester as msg.sender, so this is the one proved by the transaction. */
   wallet: `0x${string}`
+  /** Empty for a single-wallet attestation. Index i pairs with ownershipProofs[i]. */
+  extraWallets: `0x${string}`[]
+  ownershipProofs: `0x${string}`[]
   githubHandle: string | null
   score: number
   computedAt: number
   blockNumber: bigint
+  /** Aggregate only. Where the record says to go to see it verified. */
+  verifyUrl: string | null
+  /** Aggregate only. Slugs earned at scan time; zero-point, so they never move the score. */
+  badges: string[]
 }
 
 export type FetchAttestationResult =
@@ -109,18 +134,99 @@ export async function fetchAttestation(
   }
 }
 
-export function decodeAttestationData(data: `0x${string}`): DecodedScoreAttestation | null {
+// schemaId is required and authoritative: it arrives from the chain alongside
+// the data, and ABI decoding is permissive enough that reading one schema's
+// bytes under another's parameters can yield plausible garbage instead of
+// throwing. Trial-decoding would turn that into a silent wrong answer.
+export function decodeAttestationData(
+  data: `0x${string}`,
+  schemaId: string,
+): DecodedScoreAttestation | null {
+  const uid = schemaId.toLowerCase()
   try {
-    const [specVersion, wallet, githubHandle, score, computedAt, blockNumber] =
-      decodeAbiParameters(SCHEMA_PARAMS, data)
-    return {
-      specVersion,
-      wallet,
-      githubHandle: githubHandle === '' ? null : githubHandle,
-      score,
-      computedAt: Number(computedAt),
-      blockNumber,
+    if (uid === ATTEST_SCHEMA_UID.toLowerCase()) {
+      const [specVersion, wallet, githubHandle, score, computedAt, blockNumber] =
+        decodeAbiParameters(SCHEMA_PARAMS, data)
+      return {
+        version: 1,
+        specVersion,
+        wallet,
+        extraWallets: [],
+        ownershipProofs: [],
+        githubHandle: githubHandle === '' ? null : githubHandle,
+        score,
+        computedAt: Number(computedAt),
+        blockNumber,
+        verifyUrl: null,
+        badges: [],
+      }
     }
+    if (uid === ATTEST_AGGREGATE_SCHEMA_UID.toLowerCase()) {
+      const [
+        specVersion,
+        wallet,
+        extraWallets,
+        ownershipProofs,
+        githubHandle,
+        score,
+        computedAt,
+        blockNumber,
+        verifyUrl,
+        badges,
+      ] = decodeAbiParameters(AGGREGATE_SCHEMA_PARAMS, data)
+      return {
+        version: 2,
+        specVersion,
+        wallet,
+        extraWallets: [...extraWallets],
+        ownershipProofs: [...ownershipProofs],
+        githubHandle: githubHandle === '' ? null : githubHandle,
+        score,
+        computedAt: Number(computedAt),
+        blockNumber,
+        verifyUrl: verifyUrl === '' ? null : verifyUrl,
+        badges: [...badges],
+      }
+    }
+    // #2306 — identical but its URL pointed at a fresh scoring run. Surfaced as
+    // null so the verify screen never offers a link that recomputes instead of
+    // showing what was verified.
+    if (uid === ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID.toLowerCase()) {
+      const [specVersion, wallet, extraWallets, ownershipProofs, githubHandle, score, computedAt, blockNumber, , badges] =
+        decodeAbiParameters(AGGREGATE_SCORE_URL_SCHEMA_PARAMS, data)
+      return {
+        version: 2,
+        specVersion,
+        wallet,
+        extraWallets: [...extraWallets],
+        ownershipProofs: [...ownershipProofs],
+        githubHandle: githubHandle === '' ? null : githubHandle,
+        score,
+        computedAt: Number(computedAt),
+        blockNumber,
+        verifyUrl: null,
+        badges: [...badges],
+      }
+    }
+    if (uid === ATTEST_AGGREGATE_LEGACY_SCHEMA_UID.toLowerCase()) {
+      const [specVersion, wallet, extraWallets, ownershipProofs, githubHandle, score, computedAt, blockNumber] =
+        decodeAbiParameters(AGGREGATE_LEGACY_SCHEMA_PARAMS, data)
+      return {
+        version: 2,
+        specVersion,
+        wallet,
+        extraWallets: [...extraWallets],
+        ownershipProofs: [...ownershipProofs],
+        githubHandle: githubHandle === '' ? null : githubHandle,
+        score,
+        computedAt: Number(computedAt),
+        blockNumber,
+        // This schema carried only a URL prefix, and no badge list at all.
+        verifyUrl: null,
+        badges: [],
+      }
+    }
+    return null
   } catch {
     return null
   }
@@ -132,7 +238,8 @@ export function validateAttestation(
   decoded: DecodedScoreAttestation | null,
 ): string[] {
   const problems: string[] = []
-  if (att.schemaId.toLowerCase() !== ATTEST_SCHEMA_UID.toLowerCase()) {
+  const uid = att.schemaId.toLowerCase()
+  if (!KNOWN_SCHEMA_UIDS.some((k) => k.toLowerCase() === uid)) {
     problems.push('attestation uses a different schema — not a Builder Score attestation')
   }
   if (decoded === null) {
@@ -146,6 +253,46 @@ export function validateAttestation(
   } catch {
     problems.push('recipient is not a valid address')
   }
+  problems.push(...aggregateStructureProblems(decoded))
+  return problems
+}
+
+// Encoding integrity only — whether the wallet set and proof list are coherent.
+// Whether a proof actually verifies is a separate, independently displayed fact
+// and deliberately never reaches classifyAttestation or scoreVerdict.
+function aggregateStructureProblems(decoded: DecodedScoreAttestation): string[] {
+  if (decoded.version !== 2) return []
+  const problems: string[] = []
+  const { extraWallets, ownershipProofs } = decoded
+
+  if (extraWallets.length === 0) {
+    problems.push('aggregate attestation carries no extra wallets')
+  }
+  if (extraWallets.length !== ownershipProofs.length) {
+    problems.push('every extra wallet needs exactly one ownership proof')
+  }
+  // Also caps how far the verify page fans out, so a hostile attestation can't
+  // turn the verifier's browser into an RPC storm.
+  if (extraWallets.length > MAX_EXTRA_WALLETS) {
+    problems.push(`aggregate attestation carries at most ${MAX_EXTRA_WALLETS} extra wallets`)
+  }
+
+  const ascending = extraWallets.every(
+    (w, i) => i === 0 || extraWallets[i - 1].toLowerCase() < w.toLowerCase(),
+  )
+  if (!ascending) {
+    problems.push('extra wallets are not in strictly ascending order')
+  }
+
+  try {
+    const primary = getAddress(decoded.wallet)
+    if (extraWallets.some((w) => getAddress(w) === primary)) {
+      problems.push('an extra wallet repeats the primary wallet')
+    }
+  } catch {
+    problems.push('an extra wallet is not a valid address')
+  }
+
   return problems
 }
 

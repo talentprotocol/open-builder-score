@@ -121,3 +121,31 @@ export async function gatherBadges(
 
   return evaluateBadges(values, spec, asOf)
 }
+
+export interface AttestedBadge {
+  slug: string
+  name: string
+  /**
+   * True when the badge has at least one check a verifier can run against
+   * public data — an RPC read or the shipped allowlist. False when the only
+   * evidence is a dated Talent Protocol export, which has no permissionless
+   * source and so can only be echoed, never confirmed.
+   */
+  reDerivable: boolean
+}
+
+export function classifyAttestedBadges(
+  slugs: string[],
+  spec: BadgeSpec = badgeSpec,
+): AttestedBadge[] {
+  return slugs.map((slug) => {
+    const def = spec.badges.find((b) => b.slug === slug)
+    // An unknown slug stays visible: hiding it would understate the claim.
+    if (!def) return { slug, name: slug, reDerivable: false }
+    return {
+      slug,
+      name: def.name,
+      reDerivable: badgeChecks(def).some((c) => c !== 'snapshot'),
+    }
+  })
+}

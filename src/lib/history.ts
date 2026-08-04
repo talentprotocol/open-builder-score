@@ -1,15 +1,16 @@
 import { getAddress } from 'viem'
-import { ATTEST_SCHEMA_UID } from './eas'
+import { KNOWN_SCHEMA_UIDS } from './eas'
 import { decodeAttestationData, EASSCAN_GRAPHQL } from './verify'
 
 // Newest-first Builder Score attestations for one wallet, decoded client-side.
-export const HISTORY_QUERY = `query($recipient: String!, $schema_id: String!) {
+export const HISTORY_QUERY = `query($recipient: String!, $schema_ids: [String!]!) {
   attestations(
-    where: { recipient: { equals: $recipient }, schemaId: { equals: $schema_id } }
+    where: { recipient: { equals: $recipient }, schemaId: { in: $schema_ids } }
     orderBy: [{ timeCreated: desc }]
     take: 20
   ) {
     id
+    schemaId
     revocationTime
     timeCreated
     data
@@ -20,6 +21,8 @@ export interface ScoreAttestationSummary {
   uid: string
   score: number
   specVersion: string
+  /** 1 for a single-wallet attestation, primary + extras for an aggregate. */
+  walletCount: number
   timeCreated: number
   revoked: boolean
 }
@@ -37,7 +40,9 @@ export function parseHistoryResponse(raw: unknown): HistoryResult {
     if (typeof item !== 'object' || item === null) continue
     const a = item as Record<string, unknown>
     if (typeof a.id !== 'string' || typeof a.data !== 'string') continue
-    const decoded = decodeAttestationData(a.data as `0x${string}`)
+    if (typeof a.schemaId !== 'string') continue
+    // An unrecognised schema decodes to null and is skipped — never guessed at.
+    const decoded = decodeAttestationData(a.data as `0x${string}`, a.schemaId)
     if (decoded === null) continue
     const revocationTime = Number(a.revocationTime ?? 0)
     const timeCreated = Number(a.timeCreated ?? 0)
@@ -46,6 +51,7 @@ export function parseHistoryResponse(raw: unknown): HistoryResult {
       uid: a.id,
       score: decoded.score,
       specVersion: decoded.specVersion,
+      walletCount: 1 + decoded.extraWallets.length,
       timeCreated,
       revoked: revocationTime !== 0,
     })
@@ -69,7 +75,7 @@ export async function fetchScoreAttestationHistory(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: HISTORY_QUERY,
-        variables: { recipient, schema_id: ATTEST_SCHEMA_UID },
+        variables: { recipient, schema_ids: [...KNOWN_SCHEMA_UIDS] },
       }),
     })
     if (!response.ok) return { status: 'error' }

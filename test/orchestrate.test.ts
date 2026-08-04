@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { gatherInputs, mergeCredentialInputs, gatherMultiInputs } from '@/lib/orchestrate'
-import type { CredentialInput } from '@/lib/types'
+import { computeScore } from '@/lib/engine'
+import specJson from '../spec/spec.json'
+import type { CredentialInput, Spec } from '@/lib/types'
+
+const spec = specJson as Spec
 
 const ok = (n: number): CredentialInput => ({ status: 'ok', accounts: [n] })
 
@@ -131,5 +135,42 @@ describe('gatherMultiInputs', () => {
 
   it('rejects an empty address list', async () => {
     await expect(gatherMultiInputs([], null)).rejects.toThrow()
+  })
+})
+
+describe('aggregate order invariance', () => {
+  // The aggregate schema stores extra_wallets in canonical (sorted) order, not
+  // the order the user typed. That is only safe because the score does not
+  // depend on merge order: sum_all sums across accounts and max_value takes the
+  // best, both commutative. Merge order affects only the `unavailable` reason
+  // string, which feeds neither total nor complete.
+  const A = '0x0000000000000000000000000000000000000001' as const
+  const B = '0x0000000000000000000000000000000000000002' as const
+
+  const fetchersFor = () => ({
+    chains: async (address: `0x${string}`) => ({
+      values:
+        address === A
+          ? { eth_global_hacker: ok(1), github_forks: ok(3) }
+          : { eth_global_hacker: ok(5), github_forks: ok(7) },
+      baseBlockNumber: address === A ? 123n : 456n,
+    }),
+    github: async () => ({ github_followers: ok(170) }),
+    speedrun: async (address: string) => ok(address === A ? 4 : 9),
+    verifiedBuilder: async (address: string) => ok(address === A ? 2 : 6),
+  })
+
+  it('scores the same total whichever order the wallets arrive in', async () => {
+    const forward = await gatherMultiInputs([A, B], 'octocat', fetchersFor())
+    const reverse = await gatherMultiInputs([B, A], 'octocat', fetchersFor())
+
+    // Pin computedAt so the age-based credentials can't drift between the two runs.
+    const at = 1784975866
+    const scoreOf = (g: Awaited<ReturnType<typeof gatherMultiInputs>>) =>
+      computeScore({ ...g.inputs, computedAt: at }, spec)
+
+    expect(scoreOf(forward).total).toBe(scoreOf(reverse).total)
+    expect(scoreOf(forward).total).toBeGreaterThan(0)
+    expect(scoreOf(forward).complete).toBe(scoreOf(reverse).complete)
   })
 })

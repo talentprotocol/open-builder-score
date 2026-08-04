@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { badgeChecks, evaluateBadges, gatherBadges, usesSnapshot } from '@/lib/badges'
+import {
+  badgeChecks,
+  classifyAttestedBadges,
+  evaluateBadges,
+  gatherBadges,
+  usesSnapshot,
+} from '@/lib/badges'
 import { mergeBadgeInputs } from '@/lib/badge-reads'
 import type { BadgeInput, BadgeSpec } from '@/lib/types'
 
@@ -247,5 +253,39 @@ describe('badges with more than one check', () => {
 
   it('is unavailable when a check fails and nothing else earned it', async () => {
     expect((await gatherDual(missing, broken)).state).toBe('unavailable')
+  })
+})
+
+describe('classifyAttestedBadges', () => {
+  // An attestation records badge slugs, but two of the four rest on dated
+  // exports from Talent Protocol with no permissionless source. A verifier must
+  // say which it could check rather than implying all were proven.
+  it('marks a badge re-derivable when it has any non-snapshot check', () => {
+    const [talentToken] = classifyAttestedBadges(['talent_token_launched'])
+    expect(talentToken).toMatchObject({ slug: 'talent_token_launched', reDerivable: true })
+
+    // $BUILD is OR-ed: the live donated() read stands on its own.
+    const [build] = classifyAttestedBadges(['build_contributor'])
+    expect(build.reDerivable).toBe(true)
+  })
+
+  it('marks snapshot-only badges as not re-derivable', () => {
+    for (const slug of ['builder_score_100', 'builder_rewards_earned']) {
+      expect(classifyAttestedBadges([slug])[0]).toMatchObject({ slug, reDerivable: false })
+    }
+  })
+
+  it('carries the display name through and keeps the attested order', () => {
+    const out = classifyAttestedBadges(['builder_score_100', 'talent_token_launched'])
+    expect(out.map((b) => b.slug)).toEqual(['builder_score_100', 'talent_token_launched'])
+    expect(out[1].name).toBe('Launched a Talent Token')
+  })
+
+  it('keeps an unknown slug visible rather than dropping it', () => {
+    // A future spec could add a badge this build has never heard of; silently
+    // hiding it would understate what the attestation claims.
+    const [unknown] = classifyAttestedBadges(['not_a_real_badge'])
+    expect(unknown).toMatchObject({ slug: 'not_a_real_badge', reDerivable: false })
+    expect(unknown.name).toBe('not_a_real_badge')
   })
 })
