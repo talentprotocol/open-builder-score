@@ -7,8 +7,6 @@ import {
   displayNote,
   formatFormula,
   groupCredentials,
-  statusReason,
-  uncountedCredentials,
 } from '@/lib/credential-reference'
 import Link from 'next/link'
 import { badgesPath } from '@/lib/routes'
@@ -20,11 +18,10 @@ const spec = specJson as Spec
 const groups = groupCredentials(spec)
 const credentialCount = groups.reduce((n, g) => n + g.credentials.length, 0)
 const maxTotal = groups.reduce((n, g) => n + g.maxTotal, 0)
-// Only the deferred group renders. The excluded credentials are an editorial
-// position, not a gap in the score — spec.json still carries them with their
-// status_reason, and uncountedCredentials still reports them, but the page no
-// longer argues the case.
-const uncounted = uncountedCredentials(spec).filter((g) => g.status === 'deferred')
+// Nothing uncounted renders here any more. spec.json still carries the
+// excluded and deferred credentials with their status_reason, and
+// uncountedCredentials still reports them so the spec tests can prove every
+// credential is accounted for — this page just no longer argues either case.
 
 export const metadata: Metadata = {
   title: 'Builder Score credentials — Open Builder Score',
@@ -90,41 +87,6 @@ export default function CredentialsPage() {
         </FadeRise>
       ))}
 
-      {uncounted.map((group) => (
-        <FadeRise whileInView key={group.status}>
-          <section className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                <PingDot settled /> {group.label}
-              </h2>
-              <span className="font-mono text-xs tracking-[0.18em] text-muted-foreground/70">
-                0 PTS
-              </span>
-            </div>
-            <p className="text-base text-muted-foreground">{group.blurb}</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {group.credentials.map((c) => (
-                <article
-                  key={c.slug}
-                  id={c.slug}
-                  className="flex scroll-mt-16 flex-col gap-1 rounded-lg border border-dashed bg-card/40 p-4 target:ring-1 target:ring-success/60"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="text-base font-medium text-muted-foreground">{c.name}</h3>
-                    <span className="shrink-0 font-mono text-base tabular-nums tracking-tighter text-muted-foreground">
-                      0 pts
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{statusReason(c)}</p>
-                  <Badge compact className="mt-1">
-                    {c.max_score} pts if it counted
-                  </Badge>
-                </article>
-              ))}
-            </div>
-          </section>
-        </FadeRise>
-      ))}
     </main>
   )
 }
