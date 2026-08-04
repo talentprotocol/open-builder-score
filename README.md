@@ -19,14 +19,16 @@ Context docs (internal):
 3. The result is **attestable** — an EAS attestation that anyone can verify by recomputing.
 
 Out of scope for the POC (deliberately): multi-wallet aggregation, GitHub sign-in
-(device flow + worker), Tier 2 explorer-backed credentials, verifier view, embeddable
+(OAuth), Tier 2 explorer-backed credentials, verifier view, embeddable
 widget, percentile context.
 
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4) — standard runtime, but everything
-  meaningful is client-side (`"use client"`): no API routes, no server state. The
-  engine stays framework-free (`src/lib/engine.ts`).
+  meaningful is client-side (`"use client"`): no server state. The only server code is the
+  three GitHub OAuth routes under `/api/github/*`, which exist because the token exchange
+  needs a client secret the browser must never see. The engine stays framework-free
+  (`src/lib/engine.ts`).
 - [viem](https://viem.sh) for RPC, with Multicall3 batching
   (`0xcA11bde05977b3631167028862bE2a173976CA11`, same address on every chain)
 - RainbowKit + wagmi for wallet connection — needed only for the attest step; scoring
@@ -57,12 +59,17 @@ points = min(round(convert(value) * multiplier), max_score)
 - **Total score = Σ credential points.** For determinism, "now" and balances are taken at an
   as-of anchor (timestamp + block number) that also goes into the attestation.
 
-## POC credential set (weights = finalized 2025 season)
+## Credential set — 15 credentials, 196 points (spec 0.2.0)
 
 > The authoritative machine-readable versions live in `spec/spec.json` (weights + math)
 > and `spec/badge-registry.json` (contract addresses, extracted from production).
 
-### Tier 1 — RPC reads (in the POC)
+Every credential carries a `status`: `active` (scored), `excluded` (computable, deliberately
+not scored) or `deferred` (wanted, not computable yet). Multipliers are still the finalized
+2025 season's; the *set* is narrower. `/credentials` renders all three, so what's left out
+is as visible as what counts.
+
+### Onchain — RPC reads
 
 | slug | max | multiplier | conversion | calc | check |
 |---|---|---|---|---|---|
@@ -73,20 +80,33 @@ points = min(round(convert(value) * multiplier), max_score)
 | eth_global_finalist | 10 | 10.0 | none | max | 19 per-event finalist NFTs (Optimism) |
 | devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | distinct event SBTs (Base/Arb/Polygon) |
 | base_devfolio_hackathons_participation | 20 | 10.0 | sqrt | max | 3 event SBTs (Base) |
-| base_learn | 13 | 1.0 | none | max | 13 completion SBTs (**Base Sepolia**) |
 | buidl_guidl_batches_graduate | 20 | 20.0 | none | max | 12 batch SBTs (OP + Arb) |
-| farcaster_farcon_nyc_2025_attendee | 12 | 12.0 | none | max | ticket NFT (Base) |
-| crypto_nomads_club | 12 | 12.0 | none | max | membership SBT (Ethereum) |
-| developer_dao_member | 8 | 0.02 | none | max | $CODE balance (Ethereum) |
-| talent_protocol_talent_holder | 8 | 0.03 | sqrt | sum | $TALENT balance (Base) |
-| talent_vault | 8 | 0.03 | sqrt | sum | `userBalanceMeta()` on vault (Base) |
 | talent_protocol_verified_builder | 20 | 20.0 | none | sum | EAS attestations (Base + Celo, via easscan GraphQL) |
 
-Plus one public-API credential in the POC: `buidl_guidl_speedrun_ethereum`
-(12 / 1.0 / none / max) — **not onchain**; it's BuidlGuidl's public API counting
-ACCEPTED challenges per wallet (verify CORS; defer if hostile).
+Plus one public-API credential: `buidl_guidl_speedrun_ethereum` (12 / 1.0 / none / max) —
+**not onchain**; it's BuidlGuidl's public API counting ACCEPTED challenges per wallet.
 
-### Deferred — needs token-metadata enumeration (post-POC)
+### Excluded — computable, deliberately not scored
+
+A Builder Score should measure building. These score attendance, membership, a buyable
+balance, or testnet activity, so they're carried in `spec.json` with `status: "excluded"`
+and a reason rather than deleted — the contracts stay documented and the cut stays legible.
+
+| slug | would-be max | why not |
+|---|---|---|
+| farcaster_farcon_nyc_2025_attendee | 12 | conference attendance is a ticket purchase |
+| crypto_nomads_club | 12 | community membership, not building |
+| developer_dao_member | 8 | a $CODE balance, buyable on the open market |
+| talent_protocol_talent_holder | 8 | a $TALENT balance — buyable, and our own token |
+| talent_vault | 8 | a $TALENT deposit — buyable, and our own token |
+| base_learn | 13 | completion SBTs live on Base Sepolia; testnet is cheap to farm |
+
+Dropping these took the ceiling from 257 to 196, and — because the scan's chain set is
+derived from the active RPC slugs — retired two whole chains: Ethereum went with CNC and
+$CODE, Base Sepolia with Base Learn. Four chains instead of six means fewer ways for a scan
+to come back incomplete, which is what gates attestation.
+
+### Deferred — needs token-metadata enumeration
 
 The "won" variants use the *same contracts* as participation but filter token metadata
 (`nft_type == "WINNER"`); Encode uses one contract with programme-type attributes:
@@ -101,11 +121,11 @@ The "won" variants use the *same contracts* as participation but filter token me
 
 `base_basecamp`'s two attendee SBTs are ERC-1155, and production reads them from its NFT
 indexer (`WalletNFT`/`TrackedNFT`), not RPC `balanceOf` (which reverts for 1155s) — it was
-mis-tiered as `rpc` in the original extraction; it needs token-id enumeration post-POC.
+mis-tiered as `rpc` in the original extraction; it needs token-id enumeration.
 
 Also skipped: `developer_dao_og` (historical balance at block 13612670).
 
-### Tier 3 — GitHub, unauthenticated (`kind: github`)
+### GitHub (`tier: github_public`)
 
 | slug | max | multiplier | conversion | calc | source |
 |---|---|---|---|---|---|
@@ -127,8 +147,8 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
 - [x] **1b. Scaffold** — Next.js 16 app via `create-next-app` ✅ (spec files get
       imported as JSON modules in phase 3).
 - [x] **3. Engine** — `src/lib/engine.ts`: pure `computeScore(inputs, spec) → {total, perCredential[]}`.
-      ✅ No DOM, no fetch, no framework imports; Vitest golden vectors (154/257 across the
-      21 POC credentials).
+      ✅ No DOM, no fetch, no framework imports; Vitest golden vectors (131/196 across the
+      15 active credentials).
 - [x] **4. Chain reads** — `src/lib/chains.ts` ✅: one Multicall3 round-trip per chain across
       6 chains, public RPC fallback lists, cross-chain count merging, per-chain failure
       isolation ("couldn't check" ≠ "not earned").
@@ -144,10 +164,118 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       E2E verified 2026-07-25 incl. the wrong-network switch path. Base mainnet registration
       deferred until after Sepolia validation (flip `ATTEST_CHAIN_ID` in `src/lib/eas.ts`).
 - [x] **8. Deploy** — Vercel ✅ 2026-07-25: [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app).
-      No env vars, no secrets — the only server-side code is the two stateless GitHub
-      device-flow passthrough routes (`/api/github/*`), which hold no state and pin the
-      public client ID. Deployed via `vercel deploy --prod` from local `main`
+      The only server-side code is the three GitHub OAuth routes (`/api/github/*`), which
+      hold no state; `GITHUB_CLIENT_SECRET` is set in the Vercel project, never committed. Deployed via `vercel deploy --prod` from local `main`
       (no git integration yet — redeploys are manual).
+- [x] **9. Aggregate attestation** — a second EAS schema so a multi-wallet score can be
+      attested, with an EIP-712 ownership signature per extra wallet stored in the record.
+      Schema registered on **Base Sepolia** 2026-08-04 as schema
+      [#2307](https://base-sepolia.easscan.org/schema/view/0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2),
+      UID `0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2` — deterministic
+      and golden-pinned in `test/eas.test.ts`, alongside the single-wallet schema
+      [#2265](https://base-sepolia.easscan.org/schema/view/0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd).
+      Re-runnable via `node --env-file=.env scripts/register-aggregate-schema.mjs` (preflight;
+      add `--send` to register). Still to do: end-to-end attest on a real multi-wallet score.
+      See "Aggregate attestation" below.
+
+## Canonical domain — a deployment prerequisite
+
+`SITE_ORIGIN` in `src/lib/routes.ts` is hardcoded to `https://talentprotocol.com`, and that
+origin is now **written onchain** in schema #2304's description, where it cannot be edited
+(only superseded). It is deliberately not read from the environment: these URLs outlive the
+deployment that minted them, and a `VERCEL_URL` would point at a preview that stops resolving.
+
+**It does not resolve yet.** `talentprotocol.com` serves the main Talent app, whose root
+`app/[id]/` dynamic segment catches `/verify` and `/score`, and whose `/api` clashes outright.
+Until talent-apps rewrites those paths to this app (or this app gets a `basePath`), the link
+in the schema description is dead. Fixing that is the last step to making the onchain pointer
+genuinely useful.
+
+## Aggregate attestation
+
+Scoring across up to 5 wallets already worked; attesting the result did not, because the
+single-wallet schema anchors one address and nothing proved the user owned wallets 2–5.
+Without that proof anyone could borrow a whale's address into their aggregate.
+
+Schema v2 (`ATTEST_AGGREGATE_SCHEMA`, Base Sepolia schema #2307) keeps every v1 field and adds
+the wallet set with its proofs, plus a pointer back into this app:
+
+```
+string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges
+```
+
+**`verify_url` opens the verification view, not a fresh scoring run.** Someone reading an
+attestation wants to see what was verified, not start a new computation — so it points at
+`/verify/wallet/<primary>`, which resolves to that wallet's most recent attestation and hands
+off to the verify screen.
+
+It is keyed on the wallet rather than on the attestation's own UID because **an attestation can
+never contain a link to itself**, for two independent reasons, both confirmed by recomputing a
+live attestation's UID from its fields: the UID hashes the record's own `data`, and it also
+hashes `block.timestamp`, which isn't known until the transaction is mined. The URL is built by
+the app's own router (`absoluteUrl(verifyWalletPath(…))`) so it cannot drift from real routing.
+
+**`badges` records zero-point achievements, and the verifier says which it can check.** Badges
+never affect the score. But `builder_score_100` and `builder_rewards_earned` are dated exports
+from Talent Protocol with no permissionless source, so a verifier can only echo them. The verify
+screen labels each badge `re-derivable from public data` or `rests on a dated Talent Protocol
+export — recorded, not independently checkable`, rather than implying all were proven.
+`classifyAttestedBadges` in `src/lib/badges.ts` draws that line, and an unknown slug stays
+visible rather than being dropped.
+
+Note easscan renders these as plain text, not links — it does not autolink attestation values.
+Three earlier cuts were superseded: #2304 (no URL field, 0 attestations), #2305
+(`verify_url_prefix`, 1 attestation) and #2306 (`score_url`, 1 attestation). Both #2305 and
+#2306 stay decode-only in `verify.ts` so their attestations keep verifying — the same rule that
+kept the single-wallet schema alive. A #2306 record surfaces `verifyUrl: null`, so the screen
+never offers a link that recomputes instead of showing what was verified.
+
+`wallet` stays the primary — that keeps `recipient == wallet`, keeps `isSelfAttested`
+unchanged, and leaves `ownership_proofs[i]` a clean 1:1 with `extra_wallets[i]`. The primary
+needs no proof; `msg.sender` is its proof. `extra_wallets` is stored in canonical (sorted,
+deduped) order, so the onchain array *is* the array the verifier reconstructs against.
+
+Each extra wallet signs this, once, on Base Sepolia:
+
+```
+domain  { name: 'Open Builder Score', version: '1', chainId: 84532, verifyingContract: <EAS> }
+message WalletOwnership { statement, wallet, primary, wallets[], computedAt, expiresAt }
+```
+
+- **Only the signature is stored.** The payload is reconstructed at verify time from fields
+  already in the attestation, which is why the domain must be deterministic — no origin.
+- **`expiresAt` is derived** (`computed_at + 24h`), so nothing extra is stored and nothing can
+  be forged. Verification checks the attestation's `timeCreated` falls inside that window;
+  `timeCreated` is recorded by EAS, and the attester cannot pick it.
+- **No nonce is needed.** `primary` and the whole wallet set are bound into the message, so a
+  signature cannot be replayed into someone else's aggregate.
+- Signatures are stored **verbatim, never unwrapped** — a smart account returns an ABI-encoded
+  wrapper, and while counterfactual an ERC-6492 one, which is exactly what makes it verifiable.
+
+What verification can honestly claim, spelled out on the verify screen:
+
+| signer | check | strength |
+|---|---|---|
+| EOA | `recoverTypedDataAddress` | offline, permissionless, true forever |
+| EIP-7702 delegated EOA signing with its key | `recoverTypedDataAddress` | same — recovery succeeds even though the account has code |
+| smart account (or a 7702 account returning a wrapped signature) | ERC-1271 / ERC-6492 via RPC | depends on the account's **current** owners or delegation |
+
+Worth knowing: both wallets that have used the single-wallet schema on Base Sepolia are **EIP-7702
+delegated EOAs** (delegate `0x63c0c19a…`, ERC-1271 live), so the contract path is not hypothetical
+here — and a 7702 delegation can be re-pointed or revoked, which is exactly the mutability the
+ERC-1271 caveat is about.
+
+ERC-1271 is a call to a contract whose owner set can change, so it answers "does this account
+accept the signature *today*", not "did it at attest time". Public Base RPCs prune state, so
+as-of-block verification needs an archive node; `verifyOwnershipProofs` takes an optional
+`blockNumber` for anyone who has one, and defaults to latest. An RPC failure reports
+`unchecked`, never `invalid` — the same "couldn't check ≠ not earned" rule the chain reads
+follow.
+
+Ownership is displayed as its own line and deliberately never reaches `classifyAttestation`
+or `scoreVerdict`: score correctness and wallet ownership are independent facts. The
+percentile corpus stays single-wallet only, since mixing 1-wallet and 5-wallet totals is not
+like-for-like.
 
 ## Badges
 
@@ -247,10 +375,64 @@ All three README-era unknowns were extracted from talent-api and live-verified (
    `any?` short-circuit means prod effectively only queries Base; this POC follows the spec
    and queries both.)
 
+## GitHub sign-in
+
+Standard OAuth web flow: click, authorize on github.com, land back signed in. One tab, two
+clicks, nothing to type.
+
+Signing in buys two things: it proves the GitHub handle going into a score is yours (the
+attest panel enforces the match), and it lifts the GitHub API limit from 60 to 5,000 req/hr.
+The token is scope-less and lives in `sessionStorage`, so it dies with the tab.
+
+**This is the one place the repo needs a secret.** GitHub does not support PKCE, so
+exchanging the callback code for a token requires `GITHUB_CLIENT_SECRET`. It is read only in
+`src/lib/github-oauth.ts`, which is server-only — it never enters the client bundle, and it
+is never committed. Scoring is unaffected either way: it is fully client-side and works
+signed-out, so a deployment without the secret just reports that sign-in isn't configured.
+
+| variable | where | required |
+|---|---|---|
+| `GITHUB_CLIENT_SECRET` | server only — `.env.local`, and Vercel project settings | for sign-in |
+| `NEXT_PUBLIC_GITHUB_CLIENT_ID` | optional override; the committed default is a public identifier | no |
+
+Setup, once per environment:
+
+1. In the GitHub app's settings, add a **Callback URL** for each origin —
+   `http://localhost:3000/api/github/callback` and the deployed equivalent. GitHub
+   validates `redirect_uri` against this list, so an unregistered origin simply fails.
+2. Generate a client secret and put it in `.env.local` (git-ignored) and in Vercel.
+3. Nothing else — no scopes are requested, and no installation is required.
+
+The flow is three small routes and no server-side state: `/api/github/authorize` mints a
+CSRF `state` and redirects to GitHub; `/api/github/callback` verifies that `state`, does the
+secret-bearing exchange, and parks `{token, login}` in a short-lived `HttpOnly` cookie;
+`/api/github/session` hands that to the client once and clears it, so the token's resting
+place stays `sessionStorage`.
+
+This replaced an OAuth **device flow**, which needed no secret but asked the user to copy a
+code into a second tab — a TV/CLI affordance, not a web one. The secret is the price of the
+better flow; GitHub offers no secretless redirect.
+
 ## Ground rules
 
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.
 - `spec.json` is versioned; any weight/credential change bumps the version. Attestations
   carry the version they were computed with.
-- Zero secrets in the repo, zero server-side state. If a feature needs a backend, it's out
-  of scope for this repo (except, later, one stateless CORS/token worker for GitHub sign-in).
+- Zero secrets **in the repo** and zero server-side state. `GITHUB_CLIENT_SECRET` is the
+  single exception, and it stays an environment variable read only by server code — GitHub
+  has no PKCE, so a redirect sign-in cannot be done without one. Everything that computes a
+  score still runs in the browser against public endpoints with no keys.
+- **Wallet ownership is proved by the attestation.** Anyone may score any address — that's
+  the point of an open score — but attesting requires the connected wallet to *be* the scored
+  wallet. EAS records the attester as `msg.sender`, so the transaction itself is the proof
+  and anyone can check it afterwards by comparing `attester` to the attested `wallet`
+  (`isSelfAttested` in `src/lib/verify.ts`, surfaced on the verify screen).
+
+  An aggregate has no `msg.sender` for wallets 2–5, so each of them signs an EIP-712
+  ownership message and **the signature is stored in the attestation**. That is the whole
+  difference from SIWE: the objection to a browser `personal_sign` was never the signature,
+  it was that the result never left the browser. A signature written onchain is checkable by
+  anyone, forever, with no server — and for EOAs, with no network call at all. SIWE itself is
+  still the wrong format here: its `domain` and `uri` are origin-bound, so a message couldn't
+  be reconstructed at verify time across localhost, previews, and production without storing
+  the origin too.

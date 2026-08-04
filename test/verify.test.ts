@@ -6,12 +6,17 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isSelfAttested,
   parseAttestationResponse,
   scoreVerdict,
   validateAttestation,
   type OnchainAttestation,
 } from '@/lib/verify'
-import { ATTEST_SCHEMA_UID } from '@/lib/eas'
+import {
+  ATTEST_SCHEMA_UID,
+  ATTEST_AGGREGATE_SCHEMA_UID,
+  ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
+} from '@/lib/eas'
 import specJson from '../spec/spec.json'
 import type { ScoreResult, Spec } from '@/lib/types'
 
@@ -80,10 +85,15 @@ describe('isAttestationUid', () => {
 
 describe('decodeAttestationData', () => {
   it('round-trips the schema fields', () => {
-    const decoded = decodeAttestationData(encodeData())
+    const decoded = decodeAttestationData(encodeData(), ATTEST_SCHEMA_UID)
     expect(decoded).toEqual({
+      version: 1,
       specVersion: spec.version,
       wallet: WALLET,
+      extraWallets: [],
+      ownershipProofs: [],
+      verifyUrl: null,
+      badges: [],
       githubHandle: 'octocat',
       score: 103,
       computedAt: 1784975866,
@@ -91,21 +101,21 @@ describe('decodeAttestationData', () => {
     })
   })
   it('maps an empty github handle to null', () => {
-    expect(decodeAttestationData(encodeData({ githubHandle: '' }))?.githubHandle).toBeNull()
+    expect(decodeAttestationData(encodeData({ githubHandle: '' }), ATTEST_SCHEMA_UID)?.githubHandle).toBeNull()
   })
   it('returns null on undecodable data', () => {
-    expect(decodeAttestationData('0x1234')).toBeNull()
+    expect(decodeAttestationData('0x1234', ATTEST_SCHEMA_UID)).toBeNull()
   })
 })
 
 describe('validateAttestation', () => {
   it('passes a clean attestation', () => {
     const att = attestation()
-    expect(validateAttestation(att, decodeAttestationData(att.data))).toEqual([])
+    expect(validateAttestation(att, decodeAttestationData(att.data, att.schemaId))).toEqual([])
   })
   it('flags a foreign schema', () => {
     const att = attestation({ schemaId: `0x${'00'.repeat(32)}` })
-    const problems = validateAttestation(att, decodeAttestationData(att.data))
+    const problems = validateAttestation(att, decodeAttestationData(att.data, att.schemaId))
     expect(problems.some((p) => p.includes('different schema'))).toBe(true)
   })
   it('flags undecodable data', () => {
@@ -114,7 +124,7 @@ describe('validateAttestation', () => {
   })
   it('flags recipient / wallet mismatch', () => {
     const att = attestation({ recipient: zeroAddress })
-    const problems = validateAttestation(att, decodeAttestationData(att.data))
+    const problems = validateAttestation(att, decodeAttestationData(att.data, att.schemaId))
     expect(problems.some((p) => p.includes('recipient'))).toBe(true)
   })
 })
@@ -122,19 +132,43 @@ describe('validateAttestation', () => {
 describe('classifyAttestation', () => {
   it('classifies a clean attestation as ok', () => {
     const att = attestation()
-    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('ok')
+    expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('ok')
   })
   it('classifies a revoked-only attestation as revoked', () => {
     const att = attestation({ revocationTime: 1784976000 })
-    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('revoked')
+    expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('revoked')
   })
   it('classifies a spec-version override as spec_mismatch', () => {
     const att = attestation({ data: encodeData({ specVersion: '9.9.9' }) })
-    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('spec_mismatch')
+    expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('spec_mismatch')
   })
   it('classifies a foreign schema as malformed even when also revoked (precedence)', () => {
     const att = attestation({ schemaId: `0x${'00'.repeat(32)}`, revocationTime: 1784976000 })
-    expect(classifyAttestation(att, decodeAttestationData(att.data)).kind).toBe('malformed')
+    expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('malformed')
+  })
+})
+
+describe('isSelfAttested', () => {
+  const decoded = () => decodeAttestationData(encodeData(), ATTEST_SCHEMA_UID)!
+
+  it('is true when the attester is the scored wallet, whatever the casing', () => {
+    expect(isSelfAttested(attestation(), decoded())).toBe(true)
+    expect(
+      isSelfAttested(attestation({ attester: WALLET.toLowerCase() as `0x${string}` }), decoded()),
+    ).toBe(true)
+  })
+  it('is false when someone else attested the score', () => {
+    expect(isSelfAttested(attestation({ attester: zeroAddress }), decoded())).toBe(false)
+  })
+  it('is false rather than throwing on a malformed attester', () => {
+    expect(isSelfAttested(attestation({ attester: 'not-an-address' }), decoded())).toBe(false)
+  })
+  it('does not affect the score verdict or classification', () => {
+    // The two facts are independent: a score attested by a third party still
+    // recomputes correctly, and pre-gate attestations must not read as malformed.
+    const thirdParty = attestation({ attester: zeroAddress })
+    expect(classifyAttestation(thirdParty, decoded()).kind).toBe('ok')
+    expect(scoreVerdict(103, scoreResult(103, true))).toBe('match')
   })
 })
 
@@ -195,5 +229,204 @@ describe('fetchAttestation', () => {
       throw new Error('boom')
     }) as typeof fetch
     expect((await fetchAttestation(UID, fakeFetch)).status).toBe('error')
+  })
+})
+
+const EXTRA_A = '0x1563915e194D8CfBA1943570603F7606A3115508' as const
+const EXTRA_B = '0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A' as const
+
+function encodeAggregateData(
+  overrides: Partial<{
+    specVersion: string
+    wallet: `0x${string}`
+    extraWallets: `0x${string}`[]
+    ownershipProofs: `0x${string}`[]
+    githubHandle: string
+    score: number
+    computedAt: bigint
+    blockNumber: bigint
+    verifyUrl: string
+    badges: string[]
+  }> = {},
+): `0x${string}` {
+  const v = {
+    specVersion: spec.version,
+    wallet: WALLET,
+    extraWallets: [EXTRA_A, EXTRA_B] as `0x${string}`[],
+    ownershipProofs: [`0x${'11'.repeat(65)}`, `0x${'22'.repeat(65)}`] as `0x${string}`[],
+    githubHandle: 'octocat',
+    score: 103,
+    computedAt: 1784975866n,
+    blockNumber: 49093260n,
+    verifyUrl: 'https://talentprotocol.com/verify/wallet/0xabc',
+    badges: ['talent_token_launched'],
+    ...overrides,
+  }
+  return encodeAbiParameters(
+    [
+      { type: 'string' },
+      { type: 'address' },
+      { type: 'address[]' },
+      { type: 'bytes[]' },
+      { type: 'string' },
+      { type: 'uint16' },
+      { type: 'uint64' },
+      { type: 'uint64' },
+      { type: 'string' },
+      { type: 'string[]' },
+    ],
+    [
+      v.specVersion,
+      v.wallet,
+      v.extraWallets,
+      v.ownershipProofs,
+      v.githubHandle,
+      v.score,
+      v.computedAt,
+      v.blockNumber,
+      v.verifyUrl,
+      v.badges,
+    ],
+  )
+}
+
+const aggregateAttestation = (overrides: Partial<OnchainAttestation> = {}): OnchainAttestation => ({
+  ...attestation(),
+  schemaId: ATTEST_AGGREGATE_SCHEMA_UID,
+  data: encodeAggregateData(),
+  ...overrides,
+})
+
+describe('decodeAttestationData — schema dispatch', () => {
+  it('decodes a single-wallet record with empty wallet-set fields', () => {
+    const decoded = decodeAttestationData(encodeData(), ATTEST_SCHEMA_UID)
+    expect(decoded).toMatchObject({ version: 1, wallet: WALLET, extraWallets: [], ownershipProofs: [] })
+  })
+
+  it('carries a verify URL and the earned badge slugs', () => {
+    const att = aggregateAttestation()
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    expect(decoded.verifyUrl).toBe('https://talentprotocol.com/verify/wallet/0xabc')
+    expect(decoded.badges).toEqual(['talent_token_launched'])
+  })
+
+  it('decodes an aggregate record with its wallet set and proofs', () => {
+    const decoded = decodeAttestationData(encodeAggregateData(), ATTEST_AGGREGATE_SCHEMA_UID)
+    expect(decoded).toMatchObject({
+      version: 2,
+      wallet: WALLET,
+      extraWallets: [EXTRA_A, EXTRA_B],
+      score: 103,
+    })
+    expect(decoded?.ownershipProofs).toHaveLength(2)
+  })
+
+  it('returns null for an unknown schema rather than guessing', () => {
+    expect(decodeAttestationData(encodeData(), `0x${'cd'.repeat(32)}`)).toBeNull()
+  })
+
+  it('returns null when single-wallet bytes are read as an aggregate', () => {
+    expect(decodeAttestationData(encodeData(), ATTEST_AGGREGATE_SCHEMA_UID)).toBeNull()
+  })
+})
+
+describe('validateAttestation — aggregate structure', () => {
+  const problemsFor = (over: Parameters<typeof encodeAggregateData>[0]) => {
+    const att = aggregateAttestation({ data: encodeAggregateData(over) })
+    return validateAttestation(att, decodeAttestationData(att.data, att.schemaId))
+  }
+
+  it('accepts a well-formed aggregate', () => {
+    expect(problemsFor({})).toEqual([])
+  })
+
+  it('rejects a wallet with no matching proof', () => {
+    expect(problemsFor({ ownershipProofs: [`0x${'11'.repeat(65)}`] }).join(' ')).toMatch(/proof/i)
+  })
+
+  it('rejects an aggregate carrying no extra wallets', () => {
+    expect(problemsFor({ extraWallets: [], ownershipProofs: [] }).join(' ')).toMatch(/extra wallet/i)
+  })
+
+  it('rejects extras that are not strictly ascending, which also catches duplicates', () => {
+    expect(problemsFor({ extraWallets: [EXTRA_B, EXTRA_A] }).join(' ')).toMatch(/ascending/i)
+    expect(problemsFor({ extraWallets: [EXTRA_A, EXTRA_A] }).join(' ')).toMatch(/ascending/i)
+  })
+
+  it('rejects an extra that repeats the primary', () => {
+    expect(problemsFor({ extraWallets: [WALLET, EXTRA_B] }).join(' ')).toMatch(/primary/i)
+  })
+
+  it('rejects more extras than the wallet cap allows', () => {
+    const many = [EXTRA_A, EXTRA_B, '0x2000000000000000000000000000000000000000',
+      '0x3000000000000000000000000000000000000000',
+      '0x4000000000000000000000000000000000000000'] as `0x${string}`[]
+    expect(
+      problemsFor({ many: undefined, extraWallets: many, ownershipProofs: many.map(() => `0x${'11'.repeat(65)}` as `0x${string}`) } as never).join(' '),
+    ).toMatch(/at most/i)
+  })
+})
+
+describe('ownership and score correctness stay independent facts', () => {
+  it('classifies an aggregate with unusable proofs as ok', () => {
+    const att = aggregateAttestation({
+      data: encodeAggregateData({ ownershipProofs: [`0x${'00'.repeat(65)}`, `0x${'00'.repeat(65)}`] }),
+    })
+    const decoded = decodeAttestationData(att.data, att.schemaId)
+    expect(classifyAttestation(att, decoded).kind).toBe('ok')
+  })
+
+  it('checks self-attestation against the primary wallet', () => {
+    const att = aggregateAttestation()
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    expect(isSelfAttested(att, decoded)).toBe(true)
+    expect(isSelfAttested({ ...att, attester: EXTRA_A }, decoded)).toBe(false)
+  })
+})
+
+describe('superseded aggregate schema stays verifiable', () => {
+  // #2305 carried verify_url_prefix instead of score_url + badges. Real
+  // attestations exist against it, and the repo's rule is that older
+  // attestations keep verifying — same reason v1 was never retired.
+  const legacyData = encodeAbiParameters(
+    [
+      { type: 'string' },
+      { type: 'address' },
+      { type: 'address[]' },
+      { type: 'bytes[]' },
+      { type: 'string' },
+      { type: 'uint16' },
+      { type: 'uint64' },
+      { type: 'uint64' },
+      { type: 'string' },
+    ],
+    [
+      spec.version,
+      WALLET,
+      [EXTRA_A],
+      [`0x${'11'.repeat(65)}`],
+      'octocat',
+      81,
+      1784975866n,
+      49093260n,
+      'https://talentprotocol.com/verify/',
+    ],
+  )
+
+  it('decodes a #2305 record, with no score URL and no badges', () => {
+    const decoded = decodeAttestationData(legacyData, ATTEST_AGGREGATE_LEGACY_SCHEMA_UID)
+    expect(decoded).toMatchObject({
+      version: 2,
+      wallet: WALLET,
+      extraWallets: [EXTRA_A],
+      score: 81,
+      verifyUrl: null,
+      badges: [],
+    })
+  })
+
+  it('classifies it as ok, so the ownership proof still shows', () => {
+    const att = attestation({ schemaId: ATTEST_AGGREGATE_LEGACY_SCHEMA_UID, data: legacyData })
+    expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('ok')
   })
 })

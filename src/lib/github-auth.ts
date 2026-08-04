@@ -1,109 +1,47 @@
-// GitHub OAuth device flow (zero scopes). The client ID is a public
-// identifier — same precedent as the WalletConnect projectId.
-export const GITHUB_CLIENT_ID = 'Ov23lifhhYZia6r3ZYv3'
+// Client half of the GitHub OAuth web flow. The client ID is a public
+// identifier — same precedent as the WalletConnect projectId — so it ships
+// committed. The env override exists so the app can be pointed at a different
+// GitHub app without a code change. The matching secret is server-side only
+// (see github-oauth.ts) and never reaches this bundle.
+export const GITHUB_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || 'Ov23lifhhYZia6r3ZYv3'
 
-// Same-origin passthrough routes (GitHub's device-flow endpoints send no
-// CORS headers, so the browser can't call them directly).
-export const DEVICE_CODE_ENDPOINT = '/api/github/device-code'
-export const TOKEN_ENDPOINT = '/api/github/token'
+export const AUTHORIZE_ENDPOINT = '/api/github/authorize'
+export const SESSION_ENDPOINT = '/api/github/session'
 
-const MAX_POLLS = 180
-
-export interface DeviceCode {
-  deviceCode: string
-  userCode: string
-  verificationUri: string
-  interval: number
-}
-
-export type DeviceCodeResult =
-  | { status: 'ok'; code: DeviceCode }
-  | { status: 'error'; reason: string }
-
-export type PollResult =
-  | { status: 'token'; token: string }
-  | { status: 'denied' }
-  | { status: 'expired' }
-  | { status: 'cancelled' }
-  | { status: 'error'; reason: string }
+// Query param the callback uses to report a failure on the page the user
+// started from, since a redirect flow has nowhere else to put one.
+export const ERROR_PARAM = 'github_error'
 
 export type UserResult = { status: 'ok'; login: string } | { status: 'error'; reason: string }
 
-export async function requestDeviceCode(fetchFn: typeof fetch = fetch): Promise<DeviceCodeResult> {
+export type SessionResult =
+  | { status: 'ok'; token: string; login: string }
+  | { status: 'none' }
+  | { status: 'error'; reason: string }
+
+// Where to send the browser to start sign-in. `returnTo` comes back as the
+// landing path; the server validates it, so a crafted link can't bounce the
+// user off-origin.
+export function signInHref(returnTo: string): string {
+  return `${AUTHORIZE_ENDPOINT}?return=${encodeURIComponent(returnTo)}`
+}
+
+// Claims the session the callback parked in a cookie. Reading it clears it,
+// so this is single-use: the token's resting place is sessionStorage.
+export async function claimGithubSession(fetchFn: typeof fetch = fetch): Promise<SessionResult> {
   try {
-    const response = await fetchFn(DEVICE_CODE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: GITHUB_CLIENT_ID }),
-    })
+    const response = await fetchFn(SESSION_ENDPOINT, { cache: 'no-store' })
     if (!response.ok) return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
     const raw = (await response.json()) as Record<string, unknown>
-    if (
-      typeof raw.device_code !== 'string' ||
-      typeof raw.user_code !== 'string' ||
-      typeof raw.verification_uri !== 'string'
-    ) {
-      return { status: 'error', reason: 'GitHub returned an unexpected shape' }
+    if (raw.status === 'ok' && typeof raw.token === 'string' && typeof raw.login === 'string') {
+      return { status: 'ok', token: raw.token, login: raw.login }
     }
-    const interval = Number(raw.interval ?? 5)
-    return {
-      status: 'ok',
-      code: {
-        deviceCode: raw.device_code,
-        userCode: raw.user_code,
-        verificationUri: raw.verification_uri,
-        interval: Number.isFinite(interval) && interval > 0 ? interval : 5,
-      },
-    }
+    if (raw.status === 'none') return { status: 'none' }
+    return { status: 'error', reason: 'GitHub returned an unexpected shape' }
   } catch {
     return { status: 'error', reason: 'GitHub sign-in is unreachable' }
   }
-}
-
-export async function pollForToken(
-  deviceCode: string,
-  intervalSeconds: number,
-  opts: {
-    fetchFn?: typeof fetch
-    sleep?: (ms: number) => Promise<void>
-    shouldStop?: () => boolean
-  } = {},
-): Promise<PollResult> {
-  const fetchFn = opts.fetchFn ?? fetch
-  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
-  let interval = intervalSeconds
-  for (let i = 0; i < MAX_POLLS; i++) {
-    await sleep(interval * 1000)
-    if (opts.shouldStop?.()) return { status: 'cancelled' }
-    try {
-      const response = await fetchFn(TOKEN_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: GITHUB_CLIENT_ID, device_code: deviceCode }),
-      })
-      if (!response.ok) return { status: 'error', reason: `GitHub sign-in failed (${response.status})` }
-      const raw = (await response.json()) as Record<string, unknown>
-      if (typeof raw.access_token === 'string') return { status: 'token', token: raw.access_token }
-      switch (raw.error) {
-        case 'authorization_pending':
-          continue
-        case 'slow_down': {
-          const next = Number(raw.interval ?? interval + 5)
-          interval = Number.isFinite(next) && next > interval ? next : interval + 5
-          continue
-        }
-        case 'expired_token':
-          return { status: 'expired' }
-        case 'access_denied':
-          return { status: 'denied' }
-        default:
-          return { status: 'error', reason: 'GitHub returned an unexpected shape' }
-      }
-    } catch {
-      return { status: 'error', reason: 'GitHub sign-in is unreachable' }
-    }
-  }
-  return { status: 'expired' }
 }
 
 export async function fetchAuthenticatedUser(

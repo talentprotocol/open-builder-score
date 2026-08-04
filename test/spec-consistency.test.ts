@@ -8,21 +8,47 @@ const spec = specJson as Spec
 const registry = registryJson as unknown as Registry
 const badgeSpec = badgeSpecJson as BadgeSpec
 
-const pocSlugs = spec.credentials.filter((c) => c.poc).map((c) => c.slug)
+const activeSlugs = spec.credentials.filter((c) => c.status === 'active').map((c) => c.slug)
 
 describe('spec.json', () => {
-  it('has 21 POC credentials', () => {
-    expect(pocSlugs).toHaveLength(21)
+  it('has 15 active credentials', () => {
+    expect(activeSlugs).toHaveLength(15)
   })
 
   // Pinned so that adding a badge can never quietly widen the score. Badges
   // are zero-point; if this number moves, something entered the scoring
   // contract that should not have.
-  it('still tops out at 257 points', () => {
+  it('still tops out at 196 points', () => {
     const maxTotal = spec.credentials
-      .filter((c) => c.poc)
+      .filter((c) => c.status === 'active')
       .reduce((sum, c) => sum + c.max_score, 0)
-    expect(maxTotal).toBe(257)
+    expect(maxTotal).toBe(196)
+  })
+
+  // Pinned so that re-admitting one of these is a deliberate edit rather than
+  // a side effect. These are computable — they are out because they score
+  // attendance, membership, a buyable balance, or testnet activity.
+  it('excludes exactly the six non-building credentials', () => {
+    const excluded = spec.credentials.filter((c) => c.status === 'excluded').map((c) => c.slug)
+    expect(excluded.sort()).toEqual(
+      [
+        'base_learn',
+        'crypto_nomads_club',
+        'developer_dao_member',
+        'farcaster_farcon_nyc_2025_attendee',
+        'talent_protocol_talent_holder',
+        'talent_vault',
+      ].sort(),
+    )
+  })
+
+  it('gives every uncounted credential a reason', () => {
+    for (const c of spec.credentials) {
+      expect(['active', 'deferred', 'excluded']).toContain(c.status)
+      if (c.status !== 'active') {
+        expect(c.status_reason, `${c.slug} needs a status_reason`).toBeTruthy()
+      }
+    }
   })
 
   it('uses only known conversions and calculations', () => {
@@ -40,12 +66,15 @@ describe('spec.json', () => {
 })
 
 describe('badge-registry.json', () => {
-  const rpcPocSlugs = spec.credentials
-    .filter((c) => c.poc && c.tier === 'rpc')
+  // Excluded credentials keep their registry entries on purpose — the
+  // contracts stay documented, and nothing reads them because orchestrate
+  // builds its slug set from active alone.
+  const rpcSlugs = spec.credentials
+    .filter((c) => c.status !== 'deferred' && c.tier === 'rpc')
     .map((c) => c.slug)
 
-  it('covers every POC rpc credential with a contracts array', () => {
-    for (const slug of rpcPocSlugs) {
+  it('covers every scored and excluded rpc credential with a contracts array', () => {
+    for (const slug of rpcSlugs) {
       const entry = registry.credentials[slug]
       expect(entry, `missing registry entry for ${slug}`).toBeDefined()
       expect(Array.isArray(entry.contracts), `${slug} needs a contracts array`).toBe(true)

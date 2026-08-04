@@ -34,7 +34,9 @@ export function AttestationHistory({ wallet }: { wallet: `0x${string}` }) {
             <span
               className={a.revoked ? 'text-muted-foreground/60 line-through' : 'text-foreground'}
             >
-              {a.score} pts · spec v{a.specVersion} ·{' '}
+              {a.score} pts ·{' '}
+              {a.walletCount > 1 && <>{a.walletCount} wallets · </>}
+              spec v{a.specVersion} ·{' '}
               {new Date(a.timeCreated * 1000).toISOString().slice(0, 10)}
               {a.revoked && ' · revoked'}
             </span>

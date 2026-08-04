@@ -4,7 +4,8 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
-import { gatherInputs, type GatherSource } from '@/lib/orchestrate'
+import { scannedChainCount } from '@/lib/credential-reference'
+import { gatherMultiInputs, type GatherSource } from '@/lib/orchestrate'
 import { readGithubCredentials } from '@/lib/github'
 import { authorizedFetch } from '@/lib/github-auth'
 import { useGithubAuth } from '@/components/use-github-auth'
@@ -13,12 +14,15 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isSelfAttested,
   scoreVerdict,
   type DecodedScoreAttestation,
   type OnchainAttestation,
   type VerifyVerdict,
 } from '@/lib/verify'
-import { EASSCAN_SITE } from '@/lib/eas'
+import { EASSCAN_SITE, ATTEST_AGGREGATE_SCHEMA_UID, ATTEST_SCHEMA_UID } from '@/lib/eas'
+import { verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
+import { classifyAttestedBadges } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
 import { CredentialCard } from '@/components/credential-card'
@@ -31,7 +35,7 @@ import { SPRING } from '@/components/motion/presets'
 const spec = specJson as Spec
 
 type State =
-  | { phase: 'loading'; step: string; settled: GatherSource[] }
+  | { phase: 'loading'; step: string; settled: GatherSource[]; walletCount?: number }
   | { phase: 'invalid'; problems: string[] }
   | {
       phase: 'not_comparable'
@@ -45,26 +49,53 @@ type State =
       attestation: OnchainAttestation
       decoded: DecodedScoreAttestation
       recomputed: ScoreResult
+      /** Empty for a single-wallet attestation. Never feeds the score verdict. */
+      ownership: ProofCheck[]
     }
+
+const OWNERSHIP_COPY: Record<ProofCheck['status'], { tone: string; text: string }> = {
+  // No qualifier: recovering an address from an ECDSA signature is arithmetic
+  // over bytes already onchain — no server, no RPC, true forever.
+  eoa: { tone: 'text-success-text', text: '✓ signature recovers to this wallet' },
+  // ERC-1271 asks a contract whose owner set can change, so this is a statement
+  // about current state, not about the moment of attestation. Say so.
+  contract: {
+    tone: 'text-success-text',
+    text: '✓ accepted by the account contract (ERC-1271 — depends on its current owners)',
+  },
+  invalid: { tone: 'text-warning-text', text: '⚠ signature does not prove this wallet' },
+  expired: { tone: 'text-warning-text', text: '⚠ signed outside the scan’s validity window' },
+  missing: { tone: 'text-warning-text', text: '⚠ no ownership signature' },
+  unchecked: { tone: 'text-muted-foreground', text: '· couldn’t check right now' },
+}
 
 function AttestationDetails({
   attestation,
   decoded,
+  ownership = [],
 }: {
   attestation: OnchainAttestation
   decoded: DecodedScoreAttestation
+  ownership?: ProofCheck[]
 }) {
   return (
     <dl className="flex flex-col text-base">
       <div className="flex justify-between gap-4 border-b border-border py-1.5">
-        <dt className="shrink-0 text-muted-foreground">Wallet</dt>
+        <dt className="shrink-0 text-muted-foreground">
+          {decoded.extraWallets.length > 0 ? 'Wallets' : 'Wallet'}
+        </dt>
         <dd className="break-all text-right font-mono text-sm">
           <Link
-            href={scorePath(decoded.wallet, decoded.githubHandle)}
+            href={scorePath(decoded.wallet, decoded.githubHandle, decoded.extraWallets)}
             className="text-success-text underline"
           >
             {decoded.wallet}
           </Link>
+          {decoded.extraWallets.map((w) => (
+            <span key={w} className="block">
+              + {w}
+            </span>
+          ))}
         </dd>
       </div>
       <div className="flex justify-between gap-4 border-b border-border py-1.5">
@@ -95,7 +126,83 @@ function AttestationDetails({
       </div>
       <div className="flex justify-between gap-4 border-b border-border py-1.5">
         <dt className="shrink-0 text-muted-foreground">Attester</dt>
-        <dd className="break-all text-right font-mono text-sm">{attestation.attester}</dd>
+        <dd className="break-all text-right font-mono text-sm">
+          {attestation.attester}
+          {isSelfAttested(attestation, decoded) ? (
+            <span className="block font-sans text-xs text-success-text">
+              ✓ Self-attested — the scored wallet signed this itself
+            </span>
+          ) : (
+            <span className="block font-sans text-xs text-warning-text">
+              ⚠ Not the scored wallet — someone else attested this score
+            </span>
+          )}
+        </dd>
+      </div>
+      {decoded.extraWallets.length > 0 && (
+        <div className="flex justify-between gap-4 border-b border-border py-1.5">
+          <dt className="shrink-0 text-muted-foreground">Wallet ownership</dt>
+          <dd className="break-all text-right text-sm">
+            {ownership.length === 0 ? (
+              <span className="text-muted-foreground">· not checked</span>
+            ) : (
+              ownership.map((check) => (
+                <span key={check.wallet} className="block">
+                  <span className="font-mono">{check.wallet}</span>
+                  <span className={`block text-xs ${OWNERSHIP_COPY[check.status].tone}`}>
+                    {OWNERSHIP_COPY[check.status].text}
+                  </span>
+                </span>
+              ))
+            )}
+          </dd>
+        </div>
+      )}
+      {decoded.badges.length > 0 && (
+        <div className="flex justify-between gap-4 border-b border-border py-1.5">
+          <dt className="shrink-0 text-muted-foreground">Badges</dt>
+          <dd className="text-right text-sm">
+            {classifyAttestedBadges(decoded.badges).map((b) => (
+              <span key={b.slug} className="block">
+                {b.name}
+                <span
+                  className={`block text-xs ${
+                    b.reDerivable ? 'text-success-text' : 'text-muted-foreground'
+                  }`}
+                >
+                  {b.reDerivable
+                    ? 're-derivable from public data'
+                    : 'rests on a dated Talent Protocol export — recorded, not independently checkable'}
+                </span>
+              </span>
+            ))}
+          </dd>
+        </div>
+      )}
+      {decoded.verifyUrl && (
+        <div className="flex justify-between gap-4 border-b border-border py-1.5">
+          <dt className="shrink-0 text-muted-foreground">Verify URL</dt>
+          <dd className="break-all text-right text-sm">
+            <a href={decoded.verifyUrl} className="text-success-text underline">
+              {decoded.verifyUrl}
+            </a>
+          </dd>
+        </div>
+      )}
+      <div className="flex justify-between gap-4 border-b border-border py-1.5">
+        <dt className="shrink-0 text-muted-foreground">Schema</dt>
+        <dd className="text-right text-sm">
+          <a
+            href={`${EASSCAN_SITE}/schema/view/${
+              decoded.version === 2 ? ATTEST_AGGREGATE_SCHEMA_UID : ATTEST_SCHEMA_UID
+            }`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-success-text underline"
+          >
+            {decoded.version === 2 ? 'aggregate' : 'single-wallet'}
+          </a>
+        </dd>
       </div>
       <div className="flex justify-between gap-4 py-1.5">
         <dt className="shrink-0 text-muted-foreground">Onchain record</dt>
@@ -146,7 +253,10 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         setState({ phase: 'invalid', problems: [fetched.reason] })
         return
       }
-      const decoded = decodeAttestationData(fetched.attestation.data)
+      const decoded = decodeAttestationData(
+        fetched.attestation.data,
+        fetched.attestation.schemaId,
+      )
       const classification = classifyAttestation(fetched.attestation, decoded)
       if (classification.kind === 'malformed') {
         setState({ phase: 'invalid', problems: classification.problems })
@@ -165,13 +275,16 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         phase: 'loading',
         step: 'Recomputing the score from public data…',
         settled: [],
+        // A 5-wallet recompute fans out 5x, so say how much work is in flight
+        // rather than letting a slow scan read as hung.
+        walletCount: 1 + classification.decoded.extraWallets.length,
       })
       try {
         const fetchers = auth
           ? { github: (handle: string | null) => readGithubCredentials(handle, authorizedFetch(auth.token)) }
           : {}
-        const gather = await gatherInputs(
-          classification.decoded.wallet,
+        const gather = await gatherMultiInputs(
+          [classification.decoded.wallet, ...classification.decoded.extraWallets],
           classification.decoded.githubHandle,
           fetchers,
           (source) => {
@@ -185,12 +298,27 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         )
         if (cancelled) return
         const recomputed = computeScore(gather.inputs, spec)
+        // Ownership is checked alongside the recompute and deliberately never
+        // folded into the verdict: score correctness and wallet ownership are
+        // independent facts, and are displayed as two.
+        const ownership =
+          classification.decoded.extraWallets.length > 0
+            ? await verifyOwnershipProofs({
+                primary: classification.decoded.wallet,
+                extras: classification.decoded.extraWallets,
+                proofs: classification.decoded.ownershipProofs,
+                computedAt: classification.decoded.computedAt,
+                at: fetched.attestation.timeCreated,
+              })
+            : []
+        if (cancelled) return
         setState({
           phase: 'done',
           verdict: scoreVerdict(classification.decoded.score, recomputed),
           attestation: fetched.attestation,
           decoded: classification.decoded,
           recomputed,
+          ownership,
         })
       } catch {
         if (!cancelled) {
@@ -218,7 +346,12 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
             <ul className="mt-4 flex flex-col gap-2.5 text-base">
               {(
                 [
-                  ['chains', 'Onchain badges & balances (6 chains)'],
+                  [
+                    'chains',
+                    state.walletCount && state.walletCount > 1
+                      ? `Onchain badges & balances (${scannedChainCount(spec)} chains, ${state.walletCount} wallets)`
+                      : `Onchain badges & balances (${scannedChainCount(spec)} chains)`,
+                  ],
                   ['github', 'GitHub'],
                   ['speedrun', 'SpeedRun Ethereum'],
                   ['verifiedBuilder', 'EAS attestations'],
@@ -336,7 +469,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
           )}
 
           <FadeRise delay={0.1}>
-            <AttestationDetails attestation={state.attestation} decoded={state.decoded} />
+            <AttestationDetails attestation={state.attestation} decoded={state.decoded} ownership={state.ownership} />
           </FadeRise>
 
           <FadeRise delay={0.15}>

@@ -5,8 +5,18 @@ import { useReducedMotion } from 'motion/react'
 import { PingDot } from '@/components/motion/ping-dot'
 import { SweepOverlay } from '@/components/motion/sweep-overlay'
 import { ScoreCountUp } from '@/components/motion/score-count-up'
+import { scannedChainCount } from '@/lib/credential-reference'
+import specJson from '../../spec/spec.json'
+import type { Spec } from '@/lib/types'
 
-const ROWS = ['6 chains', 'GitHub', 'SpeedRun Ethereum', 'EAS attestations']
+const spec = specJson as Spec
+
+const ROWS = [
+  `${scannedChainCount(spec)} chains`,
+  'GitHub',
+  'SpeedRun Ethereum',
+  'EAS attestations',
+]
 
 // Self-running scan loop for the landing hero: four sources settle, a score
 // counts up, hold, repeat. Pure presentation — fetches nothing. Steps 1–4

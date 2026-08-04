@@ -5,7 +5,7 @@ import {
   HISTORY_QUERY,
   parseHistoryResponse,
 } from '@/lib/history'
-import { ATTEST_SCHEMA_UID } from '@/lib/eas'
+import { ATTEST_SCHEMA_UID, ATTEST_AGGREGATE_SCHEMA_UID } from '@/lib/eas'
 import specJson from '../spec/spec.json'
 import type { Spec } from '@/lib/types'
 
@@ -28,7 +28,14 @@ function encodeData(score: number, specVersion: string = spec.version): `0x${str
 }
 
 function entry(overrides: Record<string, unknown> = {}) {
-  return { id: UID, revocationTime: 0, timeCreated: 1784975900, data: encodeData(103), ...overrides }
+  return {
+    id: UID,
+    schemaId: ATTEST_SCHEMA_UID,
+    revocationTime: 0,
+    timeCreated: 1784975900,
+    data: encodeData(103),
+    ...overrides,
+  }
 }
 
 describe('parseHistoryResponse', () => {
@@ -37,7 +44,14 @@ describe('parseHistoryResponse', () => {
     expect(result).toEqual({
       status: 'ok',
       attestations: [
-        { uid: UID, score: 103, specVersion: spec.version, timeCreated: 1784975900, revoked: false },
+        {
+          uid: UID,
+          score: 103,
+          specVersion: spec.version,
+          walletCount: 1,
+          timeCreated: 1784975900,
+          revoked: false,
+        },
       ],
     })
   })
@@ -97,5 +111,67 @@ describe('parseHistoryResponse tolerant contract', () => {
       data: { attestations: [entry({ data: '0x1234' }), entry({ data: '0xdead' })] },
     })
     expect(result).toEqual({ status: 'ok', attestations: [] })
+  })
+})
+
+const singleData = encodeData(103)
+const aggregateData = encodeAbiParameters(
+  [
+    { type: 'string' },
+    { type: 'address' },
+    { type: 'address[]' },
+    { type: 'bytes[]' },
+    { type: 'string' },
+    { type: 'uint16' },
+    { type: 'uint64' },
+    { type: 'uint64' },
+    { type: 'string' },
+    { type: 'string[]' },
+  ],
+  [
+    spec.version,
+    WALLET,
+    ['0x1563915e194D8CfBA1943570603F7606A3115508', '0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A'],
+    [`0x${'11'.repeat(65)}`, `0x${'22'.repeat(65)}`],
+    'octocat',
+    131,
+    1784975866n,
+    49093260n,
+    'https://talentprotocol.com/score/x',
+    ['talent_token_launched'],
+  ],
+)
+
+describe('history across both schema versions', () => {
+  it('asks easscan for both schemas and selects the schemaId it dispatches on', () => {
+    expect(HISTORY_QUERY).toMatch(/schemaId:\s*\{\s*in:\s*\$schema_ids\s*\}/)
+    expect(HISTORY_QUERY).toMatch(/\$schema_ids:\s*\[String!\]!/)
+    // Without selecting schemaId the decoder would have to guess which schema a
+    // row used, which is exactly what decodeAttestationData refuses to do.
+    expect(HISTORY_QUERY).toMatch(/^\s*schemaId\s*$/m)
+  })
+
+  it('reports how many wallets each attestation covers', () => {
+    const parsed = parseHistoryResponse({
+      data: {
+        attestations: [
+          { id: `0x${'11'.repeat(32)}`, schemaId: ATTEST_SCHEMA_UID, revocationTime: 0, timeCreated: 100, data: singleData },
+          { id: `0x${'22'.repeat(32)}`, schemaId: ATTEST_AGGREGATE_SCHEMA_UID, revocationTime: 0, timeCreated: 200, data: aggregateData },
+        ],
+      },
+    })
+    expect(parsed.status).toBe('ok')
+    expect(parsed.status === 'ok' && parsed.attestations.map((a) => a.walletCount)).toEqual([1, 3])
+  })
+
+  it('skips a row whose schema it does not recognise rather than mis-decoding it', () => {
+    const parsed = parseHistoryResponse({
+      data: {
+        attestations: [
+          { id: `0x${'33'.repeat(32)}`, schemaId: `0x${'cd'.repeat(32)}`, revocationTime: 0, timeCreated: 100, data: singleData },
+        ],
+      },
+    })
+    expect(parsed.status === 'ok' && parsed.attestations).toEqual([])
   })
 })

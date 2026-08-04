@@ -7,10 +7,16 @@ import {
   displayNote,
   formatFormula,
   groupCredentials,
+  scannedChainCount,
+  statusReason,
+  uncountedCredentials,
 } from '@/lib/credential-reference'
-import type { Calculation, Conversion, Spec, SpecCredential } from '@/lib/types'
+import { buildChainPlan } from '@/lib/chains'
+import registryJson from '../spec/badge-registry.json'
+import type { Calculation, Conversion, Registry, Spec, SpecCredential } from '@/lib/types'
 
 const spec = specJson as Spec
+const registry = registryJson as unknown as Registry
 
 function cred(over: Partial<SpecCredential>): SpecCredential {
   return {
@@ -22,7 +28,7 @@ function cred(over: Partial<SpecCredential>): SpecCredential {
     multiplier: 2,
     conversion: 'no_conversion',
     calculation: 'max_value',
-    poc: true,
+    status: 'active',
     ...over,
   }
 }
@@ -41,7 +47,7 @@ describe('groupCredentials', () => {
 
   it('covers exactly the active credentials, no dupes, none missing', () => {
     const grouped = groupCredentials(spec).flatMap((g) => g.credentials.map((c) => c.slug))
-    const active = spec.credentials.filter((c) => c.poc).map((c) => c.slug)
+    const active = spec.credentials.filter((c) => c.status === 'active').map((c) => c.slug)
     expect(grouped.length).toBe(active.length)
     expect(new Set(grouped)).toEqual(new Set(active))
   })
@@ -81,7 +87,7 @@ describe('formatFormula', () => {
   })
 
   it('renders a well-formed formula for every active credential', () => {
-    for (const c of spec.credentials.filter((c) => c.poc)) {
+    for (const c of spec.credentials.filter((c) => c.status === 'active')) {
       expect(formatFormula(c)).toMatch(/^min\(round\(.+ × .+\), \d+\)$/)
     }
   })
@@ -89,7 +95,7 @@ describe('formatFormula', () => {
 
 describe('describeValue', () => {
   it('describes every value kind used by active credentials', () => {
-    for (const c of spec.credentials.filter((c) => c.poc)) {
+    for (const c of spec.credentials.filter((c) => c.status === 'active')) {
       expect(describeValue(c)).toBeTruthy()
     }
   })
@@ -116,9 +122,51 @@ describe('describeCalculation', () => {
   })
 })
 
+describe('scannedChainCount', () => {
+  // The UI copy derives from this rather than from buildChainPlan, to keep
+  // viem out of the landing bundle — so the two have to be pinned together.
+  it('matches the chain set the planner actually dials', () => {
+    const activeRpcSlugs = new Set(
+      spec.credentials.filter((c) => c.status === 'active' && c.tier === 'rpc').map((c) => c.slug),
+    )
+    expect(scannedChainCount(spec)).toBe(buildChainPlan(registry, activeRpcSlugs).length)
+  })
+
+  it('is 4 after the re-cut, down from 6', () => {
+    expect(scannedChainCount(spec)).toBe(4)
+  })
+})
+
+describe('uncountedCredentials', () => {
+  it('lists excluded before deferred, and nothing that is scored', () => {
+    const groups = uncountedCredentials(spec)
+    expect(groups.map((g) => g.status)).toEqual(['excluded', 'deferred'])
+    const listed = groups.flatMap((g) => g.credentials.map((c) => c.slug))
+    const scored = new Set(groupCredentials(spec).flatMap((g) => g.credentials.map((c) => c.slug)))
+    for (const slug of listed) expect(scored.has(slug)).toBe(false)
+  })
+
+  it('accounts for every credential exactly once, counted or not', () => {
+    const counted = groupCredentials(spec).flatMap((g) => g.credentials.map((c) => c.slug))
+    const uncounted = uncountedCredentials(spec).flatMap((g) => g.credentials.map((c) => c.slug))
+    expect([...counted, ...uncounted].sort()).toEqual(spec.credentials.map((c) => c.slug).sort())
+  })
+
+  it('gives a reason for every uncounted credential', () => {
+    for (const g of uncountedCredentials(spec)) {
+      for (const c of g.credentials) expect(statusReason(c)).toBeTruthy()
+    }
+  })
+
+  it('refuses to invent a reason for a scored credential', () => {
+    expect(() => statusReason(cred({ status: 'active' }))).toThrow(/active/)
+    expect(() => statusReason(cred({ status: 'excluded' }))).toThrow(/status_reason/)
+  })
+})
+
 describe('displayNote', () => {
-  it('curates only the two user-relevant notes', () => {
-    const noted = spec.credentials.filter((c) => c.poc && displayNote(c) !== null).map((c) => c.slug)
-    expect(new Set(noted)).toEqual(new Set(['github_repositories', 'base_learn']))
+  it('curates only the user-relevant notes', () => {
+    const noted = spec.credentials.filter((c) => c.status === 'active' && displayNote(c) !== null).map((c) => c.slug)
+    expect(new Set(noted)).toEqual(new Set(['github_repositories']))
   })
 })

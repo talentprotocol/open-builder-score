@@ -9,7 +9,9 @@ const NOW = 1_753_401_600
 
 const ok = (...accounts: number[]): CredentialInput => ({ status: 'ok', accounts })
 
-// Every POC slug present; hand-computed expected points in comments.
+// Hand-computed expected points in comments. The six excluded slugs are kept
+// in the fixture on purpose: feeding the engine values it must not score is
+// how we prove exclusion actually holds.
 const goldenValues: Record<string, CredentialInput> = {
   eth_global_hacker: ok(2),                    // min(round(2×12), 12)  = 12
   eth_global_builder: ok(),                    // no accounts           = 0 (not_earned)
@@ -18,15 +20,16 @@ const goldenValues: Record<string, CredentialInput> = {
   eth_global_finalist: ok(1),                  // min(10, 10)           = 10
   devfolio_hackathons_participation: ok(9),    // sqrt(9)=3 ×10=30→20   = 20
   base_devfolio_hackathons_participation: ok(1), // sqrt(1)×10          = 10
-  base_learn: ok(7),                           // 7×1                   = 7
   buidl_guidl_speedrun_ethereum: ok(4),        // 4×1                   = 4
   buidl_guidl_batches_graduate: ok(1),         // 1×20                  = 20
-  farcaster_farcon_nyc_2025_attendee: ok(1),   // 1×12                  = 12
-  crypto_nomads_club: ok(0),                   //                       = 0
-  developer_dao_member: ok(150),               // 150×0.02              = 3
-  talent_protocol_talent_holder: ok(900),      // sqrt(900)=30 ×0.03=0.9→round = 1
-  talent_vault: ok(0),                         //                       = 0
   talent_protocol_verified_builder: ok(2),     // 2×20=40→20            = 20
+  // Excluded — scored 7/12/0/3/1/0 = 23 points before the re-cut, 0 now.
+  base_learn: ok(7),
+  farcaster_farcon_nyc_2025_attendee: ok(1),
+  crypto_nomads_club: ok(0),
+  developer_dao_member: ok(150),
+  talent_protocol_talent_holder: ok(900),
+  talent_vault: ok(0),
   github_account_age: ok(NOW - 165_564_000),   // 5.25y ×1 → round      = 5
   github_followers: ok(170),                   // sqrt(170)≈13.04→13→6  = 6
   github_stars: ok(64),                        // sqrt(64)=8 ×0.5       = 4
@@ -52,18 +55,33 @@ describe('convert', () => {
 describe('computeScore — golden vector', () => {
   const result = computeScore({ computedAt: NOW, values: goldenValues }, spec)
 
-  it('total is 154', () => expect(result.total).toBe(154))
-  it('maxTotal is 257', () => expect(result.maxTotal).toBe(257))
+  it('total is 131', () => expect(result.total).toBe(131))
+  it('maxTotal is 196', () => expect(result.maxTotal).toBe(196))
   it('is complete', () => expect(result.complete).toBe(true))
-  it('covers all 21 POC credentials', () => expect(result.perCredential).toHaveLength(21))
+  it('covers all 15 active credentials', () => expect(result.perCredential).toHaveLength(15))
 
   const points = Object.fromEntries(result.perCredential.map((r) => [r.slug, r.points]))
   it.each([
     ['eth_global_hacker', 12], ['eth_global_finalist', 10],
-    ['devfolio_hackathons_participation', 20], ['base_learn', 7],
-    ['talent_protocol_talent_holder', 1], ['talent_protocol_verified_builder', 20],
+    ['devfolio_hackathons_participation', 20],
+    ['base_devfolio_hackathons_participation', 10],
+    ['buidl_guidl_batches_graduate', 20], ['talent_protocol_verified_builder', 20],
     ['github_account_age', 5], ['github_followers', 6], ['github_forks', 12],
   ])('%s = %i points', (slug, expected) => expect(points[slug]).toBe(expected))
+
+  it('scores no excluded credential, even with a value supplied', () => {
+    const scored = new Set(result.perCredential.map((r) => r.slug))
+    for (const slug of [
+      'base_learn',
+      'farcaster_farcon_nyc_2025_attendee',
+      'crypto_nomads_club',
+      'developer_dao_member',
+      'talent_protocol_talent_holder',
+      'talent_vault',
+    ]) {
+      expect(scored.has(slug), `${slug} is excluded and must not be scored`).toBe(false)
+    }
+  })
 
   it('zero raw value is not_earned with 0 points', () => {
     const pioneer = result.perCredential.find((r) => r.slug === 'eth_global_pioneer')!
@@ -78,9 +96,9 @@ describe('computeScore — golden vector', () => {
     expect(builder.formula).toBe('—')
   })
 
-  it('renders an explainable formula string', () => {
-    const talent = result.perCredential.find((r) => r.slug === 'talent_protocol_talent_holder')!
-    expect(talent.formula).toBe('min(round(sqrt(900) × 0.03), 8) = 1')
+  it('renders an explainable formula string, clamp included', () => {
+    const forks = result.perCredential.find((r) => r.slug === 'github_forks')!
+    expect(forks.formula).toBe('min(round(sqrt(49) × 2), 12) = 12')
   })
 })
 
@@ -108,19 +126,36 @@ describe('computeScore — calculation modes', () => {
 })
 
 describe('computeScore — unavailable propagation', () => {
+  // Pioneer scores 0 in the golden vector, so the total is unchanged and this
+  // isolates the completeness effect from the points effect.
   const values = {
     ...goldenValues,
-    crypto_nomads_club: { status: 'unavailable', reason: 'RPC failed' } as CredentialInput,
+    eth_global_pioneer: { status: 'unavailable', reason: 'RPC failed' } as CredentialInput,
   }
   const result = computeScore({ computedAt: NOW, values }, spec)
 
-  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(154))
+  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(131))
   it('marks the result incomplete', () => expect(result.complete).toBe(false))
   it('carries the reason', () => {
-    const cnc = result.perCredential.find((r) => r.slug === 'crypto_nomads_club')!
-    expect(cnc.state).toBe('unavailable')
-    expect(cnc.points).toBe(0)
-    expect(cnc.unavailableReason).toBe('RPC failed')
+    const pioneer = result.perCredential.find((r) => r.slug === 'eth_global_pioneer')!
+    expect(pioneer.state).toBe('unavailable')
+    expect(pioneer.points).toBe(0)
+    expect(pioneer.unavailableReason).toBe('RPC failed')
+  })
+
+  it('an unavailable excluded credential cannot make a score incomplete', () => {
+    const r = computeScore(
+      {
+        computedAt: NOW,
+        values: {
+          ...goldenValues,
+          crypto_nomads_club: { status: 'unavailable', reason: 'RPC failed' } as CredentialInput,
+        },
+      },
+      spec,
+    )
+    expect(r.complete).toBe(true)
+    expect(r.total).toBe(131)
   })
 
   it('treats a missing slug as unavailable', () => {
@@ -141,8 +176,8 @@ describe('multi-account aggregation', () => {
     version: 'test',
     constants: { SECONDS_IN_A_YEAR: 31536000 },
     credentials: [
-      { slug: 'sum_cred', name: 'Sum', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'sum_all', poc: true },
-      { slug: 'max_cred', name: 'Max', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'max_value', poc: true },
+      { slug: 'sum_cred', name: 'Sum', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'sum_all', status: 'active' },
+      { slug: 'max_cred', name: 'Max', tier: 'rpc', value: 'v', max_score: 100, multiplier: 1, conversion: 'no_conversion', calculation: 'max_value', status: 'active' },
     ],
   }
   it('sum_all sums accounts across wallets', () => {

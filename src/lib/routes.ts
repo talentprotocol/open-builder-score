@@ -1,6 +1,18 @@
 // Route builders shared by the input and results screens, so the URL shape
 // lives in exactly one place. Pure module: no imports, no framework.
 
+// Hardcoded, not read from the environment. These URLs outlive the deployment
+// that produced them — a shared link, an OG tag, and above all the schema
+// description written onchain, which cannot be edited. Deriving the origin from
+// window.location or a Vercel env var would mint links pointing at a preview
+// deployment that stops resolving.
+export const SITE_ORIGIN = 'https://talentprotocol.com'
+
+export function absoluteUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path
+  return `${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 function cleanExtras(extras: string[]): string[] {
   return extras.map((e) => e.trim()).filter((e) => e !== '')
 }
@@ -33,6 +45,14 @@ export function inputPath(
 
 export function verifyPath(uid: string | null = null): string {
   return uid ? `/verify/${uid}` : '/verify'
+}
+
+// Resolves to that wallet's most recent attestation. This is what an attestation
+// points at, because it cannot point at itself: EAS hashes both the record's own
+// data and block.timestamp into the UID, so the UID is neither knowable nor
+// self-containable before the transaction is mined.
+export function verifyWalletPath(wallet: string): string {
+  return `/verify/wallet/${wallet}`
 }
 
 export function credentialsPath(slug: string | null = null): string {

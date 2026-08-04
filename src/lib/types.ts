@@ -1,6 +1,13 @@
 export type Conversion = 'no_conversion' | 'sqrt' | 'log' | 'timestamp_to_year'
 export type Calculation = 'sum_all' | 'max_value'
 
+// `active` credentials are the ones the engine scores. The other two are both
+// "not counted" but for opposite reasons, and the distinction is the point:
+// `deferred` means we want it and can't compute it yet, `excluded` means it is
+// perfectly computable and we decided it isn't builder signal. Both carry a
+// `status_reason` so the credentials reference can say which is which.
+export type CredentialStatus = 'active' | 'deferred' | 'excluded'
+
 export interface SpecCredential {
   slug: string
   name: string
@@ -10,7 +17,8 @@ export interface SpecCredential {
   multiplier: number
   conversion: Conversion
   calculation: Calculation
-  poc: boolean
+  status: CredentialStatus
+  status_reason?: string
   notes?: string
 }
 

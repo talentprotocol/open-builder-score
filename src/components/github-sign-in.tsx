@@ -1,131 +1,94 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import {
-  fetchAuthenticatedUser,
-  pollForToken,
-  requestDeviceCode,
-} from '@/lib/github-auth'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { motion } from 'motion/react'
+import { claimGithubSession, ERROR_PARAM, signInHref } from '@/lib/github-auth'
 import { clearGithubAuth, setGithubAuth } from '@/lib/github-auth-store'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { Badge } from '@/components/ui/badge'
 
-type UiState =
-  | { step: 'idle' }
-  | { step: 'starting' }
-  | { step: 'code'; userCode: string; verificationUri: string }
-  | { step: 'error'; message: string }
-
 export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => void }) {
   const auth = useGithubAuth()
-  const [ui, setUi] = useState<UiState>({ step: 'idle' })
-  const stopped = useRef(false)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [claimError, setClaimError] = useState<string | null>(null)
+  // The claim clears its cookie, so it must happen exactly once even though
+  // React mounts effects twice in development.
+  const claimed = useRef(false)
+
+  // Captured during the first render, not inside the effect below: that effect
+  // strips the param from the URL, which would otherwise erase the message
+  // before it has been read.
+  const [reportedError] = useState(() => searchParams.get(ERROR_PARAM))
 
   useEffect(() => {
+    if (claimed.current) return
+    claimed.current = true
+    let cancelled = false
+    ;(async () => {
+      const session = await claimGithubSession()
+      if (cancelled) return
+      if (session.status === 'ok') {
+        setGithubAuth({ token: session.token, login: session.login })
+        onVerified?.(session.login)
+      } else if (session.status === 'error') {
+        setClaimError(session.reason)
+      }
+    })()
     return () => {
-      stopped.current = true
+      cancelled = true
     }
+    // onVerified is a fresh closure each render; re-running on it would claim
+    // a cookie that is already spent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleSignIn() {
-    setUi({ step: 'starting' })
-    stopped.current = false
-    const requested = await requestDeviceCode()
-    if (stopped.current) return
-    if (requested.status === 'error') {
-      setUi({ step: 'error', message: requested.reason })
-      return
-    }
-    const { deviceCode, userCode, verificationUri, interval } = requested.code
-    setUi({ step: 'code', userCode, verificationUri })
-    const polled = await pollForToken(deviceCode, interval, {
-      shouldStop: () => stopped.current,
-    })
-    if (stopped.current) return
-    if (polled.status !== 'token') {
-      const message =
-        polled.status === 'denied'
-          ? 'GitHub sign-in was denied.'
-          : polled.status === 'expired'
-            ? 'The code expired — try again.'
-            : polled.status === 'cancelled'
-              ? ''
-              : polled.reason
-      setUi(message ? { step: 'error', message } : { step: 'idle' })
-      return
-    }
-    const user = await fetchAuthenticatedUser(polled.token)
-    if (stopped.current) return
-    if (user.status === 'error') {
-      setUi({ step: 'error', message: user.reason })
-      return
-    }
-    setGithubAuth({ token: polled.token, login: user.login })
-    setUi({ step: 'idle' })
-    onVerified?.(user.login)
-  }
+  // Strip the error out of the URL once it has been captured, so a reload or a
+  // shared link doesn't resurrect a stale failure.
+  useEffect(() => {
+    if (!reportedError) return
+    const next = new URLSearchParams(window.location.search)
+    next.delete(ERROR_PARAM)
+    const query = next.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [reportedError, pathname, router])
 
-  function handleCancel() {
-    stopped.current = true
-    setUi({ step: 'idle' })
-  }
+  const error = claimError ?? reportedError
+
+  // Never round-trip a stale error through sign-in.
+  const params = new URLSearchParams(searchParams)
+  params.delete(ERROR_PARAM)
+  const returnTo = `${pathname}${params.toString() ? `?${params}` : ''}`
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
       <motion.div
-        key={auth ? 'chip' : ui.step}
+        key={auth ? 'chip' : 'signed-out'}
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.18 }}
       >
         {auth ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="flex items-center gap-2">
             <Badge variant="success" className="text-sm">
               ✓ Signed in as @{auth.login}
             </Badge>
-            <button onClick={() => clearGithubAuth()} className="underline">
+            <button type="button" onClick={() => clearGithubAuth()} className="underline">
               Sign out
             </button>
           </p>
         ) : (
-          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-            {ui.step === 'idle' && (
-              <button onClick={handleSignIn} className="self-start underline">
-                Sign in with GitHub to verify your handle
-              </button>
-            )}
-            {ui.step === 'starting' && <p>Contacting GitHub…</p>}
-            {ui.step === 'code' && (
-              <p>
-                Enter code{' '}
-                <span className="font-mono font-semibold text-foreground">{ui.userCode}</span> at{' '}
-                <a
-                  href={ui.verificationUri}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-success-text underline"
-                >
-                  github.com/login/device
-                </a>{' '}
-                — waiting for approval…{' '}
-                <button onClick={handleCancel} className="underline">
-                  cancel
-                </button>
-              </p>
-            )}
-            {ui.step === 'error' && (
-              <p className="text-destructive-text">
-                {ui.message}{' '}
-                <button onClick={handleSignIn} className="underline">
-                  retry
-                </button>
-              </p>
-            )}
-          </div>
+          // A plain link, not a fetch: this is a top-level navigation to
+          // github.com and back, so there is no in-page state to keep alive
+          // and nothing to poll.
+          <a href={signInHref(returnTo)} className="self-start underline">
+            Sign in with GitHub to verify your handle
+          </a>
         )}
       </motion.div>
-    </AnimatePresence>
+      {error && <p className="text-destructive-text">{error}</p>}
+    </div>
   )
 }

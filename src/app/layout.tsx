@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_ORIGIN } from "@/lib/routes";
 import { Cal_Sans, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -24,6 +25,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Hardcoded origin so OG/canonical tags survive a preview deployment.
+  metadataBase: new URL(SITE_ORIGIN),
   title: "Open Builder Score",
   description:
     "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol.",

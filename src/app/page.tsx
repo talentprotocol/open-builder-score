@@ -1,9 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import specJson from '../../spec/spec.json'
+import type { Spec } from '@/lib/types'
+import { scannedChainCount } from '@/lib/credential-reference'
 import { credentialsPath } from '@/lib/routes'
 import { LandingCta } from '@/components/landing-cta'
 import { HeroScan } from '@/components/hero-scan'
 import { FadeRise } from '@/components/motion/fade-rise'
+
+const spec = specJson as Spec
 
 export const metadata: Metadata = {
   title: 'Open Builder Score — an open score anyone can compute',
@@ -29,7 +34,7 @@ const VALUE_PROPS: { title: string; body: string; link?: { href: string; label: 
 
 const STEPS = [
   'Enter any wallet address or ENS name — and optionally a GitHub handle.',
-  'Your browser queries public data across 6 chains and GitHub.',
+  `Your browser queries public data across ${scannedChainCount(spec)} chains and GitHub.`,
   'Every point comes with the exact formula that produced it.',
   'Optionally attest the score on Base — verifiable by anyone.',
 ]
