@@ -167,6 +167,115 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       The only server-side code is the three GitHub OAuth routes (`/api/github/*`), which
       hold no state; `GITHUB_CLIENT_SECRET` is set in the Vercel project, never committed. Deployed via `vercel deploy --prod` from local `main`
       (no git integration yet — redeploys are manual).
+- [x] **9. Aggregate attestation** — a second EAS schema so a multi-wallet score can be
+      attested, with an EIP-712 ownership signature per extra wallet stored in the record.
+      Schema registered on **Base Sepolia** 2026-08-04 as schema
+      [#2307](https://base-sepolia.easscan.org/schema/view/0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2),
+      UID `0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2` — deterministic
+      and golden-pinned in `test/eas.test.ts`, alongside the single-wallet schema
+      [#2265](https://base-sepolia.easscan.org/schema/view/0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd).
+      Re-runnable via `node --env-file=.env scripts/register-aggregate-schema.mjs` (preflight;
+      add `--send` to register). Still to do: end-to-end attest on a real multi-wallet score.
+      See "Aggregate attestation" below.
+
+## Canonical domain — a deployment prerequisite
+
+`SITE_ORIGIN` in `src/lib/routes.ts` is hardcoded to `https://talentprotocol.com`, and that
+origin is now **written onchain** in schema #2304's description, where it cannot be edited
+(only superseded). It is deliberately not read from the environment: these URLs outlive the
+deployment that minted them, and a `VERCEL_URL` would point at a preview that stops resolving.
+
+**It does not resolve yet.** `talentprotocol.com` serves the main Talent app, whose root
+`app/[id]/` dynamic segment catches `/verify` and `/score`, and whose `/api` clashes outright.
+Until talent-apps rewrites those paths to this app (or this app gets a `basePath`), the link
+in the schema description is dead. Fixing that is the last step to making the onchain pointer
+genuinely useful.
+
+## Aggregate attestation
+
+Scoring across up to 5 wallets already worked; attesting the result did not, because the
+single-wallet schema anchors one address and nothing proved the user owned wallets 2–5.
+Without that proof anyone could borrow a whale's address into their aggregate.
+
+Schema v2 (`ATTEST_AGGREGATE_SCHEMA`, Base Sepolia schema #2307) keeps every v1 field and adds
+the wallet set with its proofs, plus a pointer back into this app:
+
+```
+string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges
+```
+
+**`verify_url` opens the verification view, not a fresh scoring run.** Someone reading an
+attestation wants to see what was verified, not start a new computation — so it points at
+`/verify/wallet/<primary>`, which resolves to that wallet's most recent attestation and hands
+off to the verify screen.
+
+It is keyed on the wallet rather than on the attestation's own UID because **an attestation can
+never contain a link to itself**, for two independent reasons, both confirmed by recomputing a
+live attestation's UID from its fields: the UID hashes the record's own `data`, and it also
+hashes `block.timestamp`, which isn't known until the transaction is mined. The URL is built by
+the app's own router (`absoluteUrl(verifyWalletPath(…))`) so it cannot drift from real routing.
+
+**`badges` records zero-point achievements, and the verifier says which it can check.** Badges
+never affect the score. But `builder_score_100` and `builder_rewards_earned` are dated exports
+from Talent Protocol with no permissionless source, so a verifier can only echo them. The verify
+screen labels each badge `re-derivable from public data` or `rests on a dated Talent Protocol
+export — recorded, not independently checkable`, rather than implying all were proven.
+`classifyAttestedBadges` in `src/lib/badges.ts` draws that line, and an unknown slug stays
+visible rather than being dropped.
+
+Note easscan renders these as plain text, not links — it does not autolink attestation values.
+Three earlier cuts were superseded: #2304 (no URL field, 0 attestations), #2305
+(`verify_url_prefix`, 1 attestation) and #2306 (`score_url`, 1 attestation). Both #2305 and
+#2306 stay decode-only in `verify.ts` so their attestations keep verifying — the same rule that
+kept the single-wallet schema alive. A #2306 record surfaces `verifyUrl: null`, so the screen
+never offers a link that recomputes instead of showing what was verified.
+
+`wallet` stays the primary — that keeps `recipient == wallet`, keeps `isSelfAttested`
+unchanged, and leaves `ownership_proofs[i]` a clean 1:1 with `extra_wallets[i]`. The primary
+needs no proof; `msg.sender` is its proof. `extra_wallets` is stored in canonical (sorted,
+deduped) order, so the onchain array *is* the array the verifier reconstructs against.
+
+Each extra wallet signs this, once, on Base Sepolia:
+
+```
+domain  { name: 'Open Builder Score', version: '1', chainId: 84532, verifyingContract: <EAS> }
+message WalletOwnership { statement, wallet, primary, wallets[], computedAt, expiresAt }
+```
+
+- **Only the signature is stored.** The payload is reconstructed at verify time from fields
+  already in the attestation, which is why the domain must be deterministic — no origin.
+- **`expiresAt` is derived** (`computed_at + 24h`), so nothing extra is stored and nothing can
+  be forged. Verification checks the attestation's `timeCreated` falls inside that window;
+  `timeCreated` is recorded by EAS, and the attester cannot pick it.
+- **No nonce is needed.** `primary` and the whole wallet set are bound into the message, so a
+  signature cannot be replayed into someone else's aggregate.
+- Signatures are stored **verbatim, never unwrapped** — a smart account returns an ABI-encoded
+  wrapper, and while counterfactual an ERC-6492 one, which is exactly what makes it verifiable.
+
+What verification can honestly claim, spelled out on the verify screen:
+
+| signer | check | strength |
+|---|---|---|
+| EOA | `recoverTypedDataAddress` | offline, permissionless, true forever |
+| EIP-7702 delegated EOA signing with its key | `recoverTypedDataAddress` | same — recovery succeeds even though the account has code |
+| smart account (or a 7702 account returning a wrapped signature) | ERC-1271 / ERC-6492 via RPC | depends on the account's **current** owners or delegation |
+
+Worth knowing: both wallets that have used the single-wallet schema on Base Sepolia are **EIP-7702
+delegated EOAs** (delegate `0x63c0c19a…`, ERC-1271 live), so the contract path is not hypothetical
+here — and a 7702 delegation can be re-pointed or revoked, which is exactly the mutability the
+ERC-1271 caveat is about.
+
+ERC-1271 is a call to a contract whose owner set can change, so it answers "does this account
+accept the signature *today*", not "did it at attest time". Public Base RPCs prune state, so
+as-of-block verification needs an archive node; `verifyOwnershipProofs` takes an optional
+`blockNumber` for anyone who has one, and defaults to latest. An RPC failure reports
+`unchecked`, never `invalid` — the same "couldn't check ≠ not earned" rule the chain reads
+follow.
+
+Ownership is displayed as its own line and deliberately never reaches `classifyAttestation`
+or `scoreVerdict`: score correctness and wallet ownership are independent facts. The
+percentile corpus stays single-wallet only, since mixing 1-wallet and 5-wallet totals is not
+like-for-like.
 
 ## Badges
 
@@ -313,10 +422,17 @@ better flow; GitHub offers no secretless redirect.
   single exception, and it stays an environment variable read only by server code — GitHub
   has no PKCE, so a redirect sign-in cannot be done without one. Everything that computes a
   score still runs in the browser against public endpoints with no keys.
-- **Wallet ownership is proved by the attestation, not by SIWE.** Anyone may score any
-  address — that's the point of an open score — but attesting requires the connected wallet
-  to *be* the scored wallet. EAS records the attester as `msg.sender`, so the transaction
-  itself is the proof and anyone can check it afterwards by comparing `attester` to the
-  attested `wallet` (`isSelfAttested` in `src/lib/verify.ts`, surfaced on the verify screen).
-  A SIWE `personal_sign` would add a ceremony whose result only the signer's own browser
-  could ever validate, which in an app with no backend proves nothing to a third party.
+- **Wallet ownership is proved by the attestation.** Anyone may score any address — that's
+  the point of an open score — but attesting requires the connected wallet to *be* the scored
+  wallet. EAS records the attester as `msg.sender`, so the transaction itself is the proof
+  and anyone can check it afterwards by comparing `attester` to the attested `wallet`
+  (`isSelfAttested` in `src/lib/verify.ts`, surfaced on the verify screen).
+
+  An aggregate has no `msg.sender` for wallets 2–5, so each of them signs an EIP-712
+  ownership message and **the signature is stored in the attestation**. That is the whole
+  difference from SIWE: the objection to a browser `personal_sign` was never the signature,
+  it was that the result never left the browser. A signature written onchain is checkable by
+  anyone, forever, with no server — and for EOAs, with no network call at all. SIWE itself is
+  still the wrong format here: its `domain` and `uri` are origin-bound, so a message couldn't
+  be reconstructed at verify time across localhost, previews, and production without storing
+  the origin too.
