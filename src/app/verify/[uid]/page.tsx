@@ -22,7 +22,7 @@ import {
 } from '@/lib/verify'
 import { EASSCAN_SITE, ATTEST_AGGREGATE_SCHEMA_UID, ATTEST_SCHEMA_UID } from '@/lib/eas'
 import { verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
-import { classifyAttestedBadges } from '@/lib/badges'
+import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
 import { CredentialCard } from '@/components/credential-card'
@@ -52,6 +52,24 @@ type State =
       /** Empty for a single-wallet attestation. Never feeds the score verdict. */
       ownership: ProofCheck[]
     }
+
+// Badges are recorded, never recomputed here. The attestation stores the slug
+// but not which check earned it, so the copy states what the badge *can* rest
+// on rather than asserting this instance was proven.
+const BADGE_EVIDENCE: Record<BadgeEvidence, { tone: string; text: string }> = {
+  public: {
+    tone: 'text-success-text',
+    text: 're-derivable from public chain history',
+  },
+  mixed: {
+    tone: 'text-muted-foreground',
+    text: 'earned by a live onchain read or by a dated Talent Protocol export — the record does not say which',
+  },
+  export: {
+    tone: 'text-muted-foreground',
+    text: 'rests on a dated Talent Protocol export — recorded, not independently checkable',
+  },
+}
 
 const OWNERSHIP_COPY: Record<ProofCheck['status'], { tone: string; text: string }> = {
   // No qualifier: recovering an address from an ECDSA signature is arithmetic
@@ -165,14 +183,8 @@ function AttestationDetails({
             {classifyAttestedBadges(decoded.badges).map((b) => (
               <span key={b.slug} className="block">
                 {b.name}
-                <span
-                  className={`block text-xs ${
-                    b.reDerivable ? 'text-success-text' : 'text-muted-foreground'
-                  }`}
-                >
-                  {b.reDerivable
-                    ? 're-derivable from public data'
-                    : 'rests on a dated Talent Protocol export — recorded, not independently checkable'}
+                <span className={`block text-xs ${BADGE_EVIDENCE[b.evidence].tone}`}>
+                  {BADGE_EVIDENCE[b.evidence].text}
                 </span>
               </span>
             ))}
