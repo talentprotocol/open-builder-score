@@ -215,13 +215,24 @@ live attestation's UID from its fields: the UID hashes the record's own `data`, 
 hashes `block.timestamp`, which isn't known until the transaction is mined. The URL is built by
 the app's own router (`absoluteUrl(verifyWalletPath(…))`) so it cannot drift from real routing.
 
-**`badges` records zero-point achievements, and the verifier says which it can check.** Badges
-never affect the score. But `builder_score_100` and `builder_rewards_earned` are dated exports
-from Talent Protocol with no permissionless source, so a verifier can only echo them. The verify
-screen labels each badge `re-derivable from public data` or `rests on a dated Talent Protocol
-export — recorded, not independently checkable`, rather than implying all were proven.
-`classifyAttestedBadges` in `src/lib/badges.ts` draws that line, and an unknown slug stays
-visible rather than being dropped.
+**`badges` records zero-point achievements, and the verifier says what each can rest on.**
+Badges never affect the score. **Three of the four touch a dated Talent Protocol export**, so the
+verify screen classifies rather than asserts — the attestation stores the slug but not which
+check earned it:
+
+| badge | evidence | shown as |
+|---|---|---|
+| Launched a Talent Token | `public` | re-derivable from public chain history |
+| $BUILD Contributor | `mixed` | earned by a live onchain read **or** by a dated export — the record does not say which |
+| Builder Score 100+ | `export` | rests on a dated Talent Protocol export — recorded, not independently checkable |
+| Earned Builder Rewards | `export` | *(same)* |
+
+Only `talent_token_launched` is fully permissionless: its allowlist is rebuilt from
+`TalentCreated` events on Celo and Polygon, and anyone re-running
+`scripts/build-talent-token-allowlist.mjs` gets the same list. `$BUILD Contributor` is an OR of
+`donated(address) > 0` and the pay-it-forward export, so calling it public would overclaim for
+anyone who earned it only through the export. `classifyAttestedBadges` in `src/lib/badges.ts`
+draws these lines; an unknown slug stays visible and is classified at the cautious end.
 
 Note easscan renders these as plain text, not links — it does not autolink attestation values.
 Three earlier cuts were superseded: #2304 (no URL field, 0 attestations), #2305
