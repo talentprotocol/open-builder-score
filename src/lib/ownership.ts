@@ -1,4 +1,6 @@
-// Ownership proofs for aggregate (multi-wallet) attestations.
+// Ownership proofs for aggregate (multi-wallet) attestations. Every wallet in
+// the set must be proven — by an EIP-712 signature stored in the attestation,
+// or by being the transaction sender EAS records as the attester.
 //
 // The primary wallet needs no proof: EAS records the attester as msg.sender, so
 // the attestation transaction is its proof. Wallets 2-5 have no msg.sender, so
@@ -21,39 +23,39 @@ export const OWNERSHIP_PROOF_TTL_SECONDS = 86_400
 
 export const OWNERSHIP_DOMAIN_NAME = 'Open Builder Score'
 
-// The proof format's version, deliberately NOT spec.version: binding the spec
-// would force re-signing every wallet on every credential re-cut, and the
-// ownership claim is about wallets, not about the score.
-export const OWNERSHIP_DOMAIN_VERSION = '1'
+// v2: recipient/issuedAt replace primary/computedAt. The ownership claim is
+// about wallets, not about the score — so the proof anchors to its own issue
+// time, which is what lets signatures survive reloads and re-scans. The
+// typehash changes with the field names, so a v1 signature can never validate
+// as v2 by construction; the version bump is legibility, not safety.
+export const OWNERSHIP_DOMAIN_VERSION = '2'
 
 export const OWNERSHIP_STATEMENT =
-  'I own this wallet and consent to including it in this Open Builder Score aggregate.'
+  'I own this wallet and consent to including it in an Open Builder Score aggregate issued to the recipient below.'
 
 export const OWNERSHIP_TYPES = {
   WalletOwnership: [
     { name: 'statement', type: 'string' },
     { name: 'wallet', type: 'address' },
-    { name: 'primary', type: 'address' },
+    { name: 'recipient', type: 'address' },
     { name: 'wallets', type: 'address[]' },
-    { name: 'computedAt', type: 'uint64' },
+    { name: 'issuedAt', type: 'uint64' },
     { name: 'expiresAt', type: 'uint64' },
   ],
 } as const
 
 export interface OwnershipMessageArgs {
-  primary: `0x${string}`
+  recipient: `0x${string}`
   wallet: `0x${string}`
   extras: `0x${string}`[]
-  computedAt: number
+  issuedAt: number
   chainId?: number
 }
 
 // Deterministic in every input — nothing here reads the clock, so a proof can be
-// reconstructed at verify time from the attestation alone. The return type is
-// inferred rather than widened to TypedDataDefinition so it stays spreadable
-// into viem's sign/recover/verify parameters.
+// reconstructed at verify time from the attestation alone.
 export function ownershipTypedData(args: OwnershipMessageArgs) {
-  const extras = canonicalExtraWallets(args.primary, args.extras)
+  const extras = canonicalExtraWallets(args.recipient, args.extras)
   return {
     domain: {
       name: OWNERSHIP_DOMAIN_NAME,
@@ -66,6 +68,52 @@ export function ownershipTypedData(args: OwnershipMessageArgs) {
     message: {
       statement: OWNERSHIP_STATEMENT,
       wallet: args.wallet,
+      recipient: args.recipient,
+      wallets: [args.recipient, ...extras],
+      issuedAt: BigInt(args.issuedAt),
+      expiresAt: BigInt(args.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS),
+    },
+  }
+}
+
+// ——— v1, verification-only. Attestations already onchain bound this exact
+// shape; it must reproduce it byte-for-byte forever. Never sign with it.
+export const LEGACY_OWNERSHIP_STATEMENT =
+  'I own this wallet and consent to including it in this Open Builder Score aggregate.'
+
+export const LEGACY_OWNERSHIP_TYPES = {
+  WalletOwnership: [
+    { name: 'statement', type: 'string' },
+    { name: 'wallet', type: 'address' },
+    { name: 'primary', type: 'address' },
+    { name: 'wallets', type: 'address[]' },
+    { name: 'computedAt', type: 'uint64' },
+    { name: 'expiresAt', type: 'uint64' },
+  ],
+} as const
+
+export interface LegacyOwnershipMessageArgs {
+  primary: `0x${string}`
+  wallet: `0x${string}`
+  extras: `0x${string}`[]
+  computedAt: number
+  chainId?: number
+}
+
+export function legacyOwnershipTypedData(args: LegacyOwnershipMessageArgs) {
+  const extras = canonicalExtraWallets(args.primary, args.extras)
+  return {
+    domain: {
+      name: OWNERSHIP_DOMAIN_NAME,
+      version: '1',
+      chainId: args.chainId ?? ATTEST_CHAIN_ID,
+      verifyingContract: EAS_CONTRACT_ADDRESS,
+    },
+    types: LEGACY_OWNERSHIP_TYPES,
+    primaryType: 'WalletOwnership' as const,
+    message: {
+      statement: LEGACY_OWNERSHIP_STATEMENT,
+      wallet: args.wallet,
       primary: args.primary,
       wallets: [args.primary, ...extras],
       computedAt: BigInt(args.computedAt),
@@ -77,10 +125,10 @@ export function ownershipTypedData(args: OwnershipMessageArgs) {
 // The onchain extra_wallets array IS this array, so ownership_proofs[i] lines up
 // with extra_wallets[i] with no index mapping anywhere.
 export function canonicalExtraWallets(
-  primary: `0x${string}`,
+  recipient: `0x${string}`,
   extras: `0x${string}`[],
 ): `0x${string}`[] {
-  const seen = new Set<string>([primary.toLowerCase()])
+  const seen = new Set<string>([recipient.toLowerCase()])
   const unique: `0x${string}`[] = []
   for (const extra of extras) {
     const key = extra.toLowerCase()
