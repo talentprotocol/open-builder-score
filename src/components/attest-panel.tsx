@@ -128,16 +128,37 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   // granted, so a wallet that exposed one account has nothing new to offer in
   // its picker. A fresh connection is what makes the wallet ask which account
   // to use, which is the only way to reach a wallet the site has never seen.
+  //
+  // openConnectModal is undefined while a wallet is connected — RainbowKit
+  // only defines it once it sees the disconnected state. Calling it from this
+  // closure would close over the stale (connected-time) undefined, which is
+  // why the modal never used to open. Instead this sets a flag that the
+  // effect below watches, opening the modal once openConnectModal actually
+  // becomes callable.
+  const [pendingConnect, setPendingConnect] = useState(false)
+
   async function handleConnectAs() {
     if (busy || signing) return
     setError(null)
     try {
       await disconnectAsync()
-      openConnectModal?.()
+      setPendingConnect(true)
     } catch (e) {
       setError(describeWalletError(e, 'connect'))
     }
   }
+
+  useEffect(() => {
+    if (!pendingConnect || !openConnectModal) return
+    // Deferred one microtask out for the same reason the other effects are:
+    // the state clear below must not read as synchronous-in-effect. Clearing
+    // first (in source order) then opening means a re-render triggered by the
+    // clear can't see pendingConnect still true and open a second modal.
+    queueMicrotask(() => {
+      setPendingConnect(false)
+      openConnectModal()
+    })
+  }, [pendingConnect, openConnectModal])
 
   async function handleSign(wallet: `0x${string}`) {
     if (signing || busy || session === null) return
@@ -373,7 +394,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
                         size="sm"
                         variant="secondary"
                         onClick={handleConnectAs}
-                        disabled={signing !== null || busy || !openConnectModal}
+                        disabled={signing !== null || busy}
                       >
                         Connect &amp; sign
                       </Button>
@@ -429,7 +450,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
                 size="sm"
                 variant="secondary"
                 onClick={handleConnectAs}
-                disabled={signing !== null || busy || !openConnectModal}
+                disabled={signing !== null || busy}
               >
                 Connect the scored wallet
               </Button>
