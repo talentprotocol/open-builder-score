@@ -5,8 +5,8 @@ import {
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
   ATTEST_AGGREGATE_SCORE_URL_SCHEMA,
   ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID,
-  ATTEST_AGGREGATE_SCHEMA,
-  ATTEST_AGGREGATE_SCHEMA_UID,
+  ATTEST_AGGREGATE_VERIFY_URL_SCHEMA,
+  ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
   ATTEST_SCHEMA,
   ATTEST_SCHEMA_UID,
   EASSCAN_SITE,
@@ -21,7 +21,7 @@ export const EASSCAN_GRAPHQL = `${EASSCAN_SITE}/graphql`
 
 // Derived from the canonical schema strings so the decoder can never drift from eas.ts.
 const SCHEMA_PARAMS = parseAbiParameters(ATTEST_SCHEMA)
-const AGGREGATE_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCHEMA)
+const AGGREGATE_VERIFY_URL_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_VERIFY_URL_SCHEMA)
 const AGGREGATE_LEGACY_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_LEGACY_SCHEMA)
 const AGGREGATE_SCORE_URL_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCORE_URL_SCHEMA)
 
@@ -161,7 +161,7 @@ export function decodeAttestationData(
         badges: [],
       }
     }
-    if (uid === ATTEST_AGGREGATE_SCHEMA_UID.toLowerCase()) {
+    if (uid === ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID.toLowerCase()) {
       const [
         specVersion,
         wallet,
@@ -173,7 +173,7 @@ export function decodeAttestationData(
         blockNumber,
         verifyUrl,
         badges,
-      ] = decodeAbiParameters(AGGREGATE_SCHEMA_PARAMS, data)
+      ] = decodeAbiParameters(AGGREGATE_VERIFY_URL_SCHEMA_PARAMS, data)
       return {
         version: 2,
         specVersion,

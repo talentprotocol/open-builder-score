@@ -14,7 +14,7 @@ import {
 } from '@/lib/verify'
 import {
   ATTEST_SCHEMA_UID,
-  ATTEST_AGGREGATE_SCHEMA_UID,
+  ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
 } from '@/lib/eas'
 import specJson from '../spec/spec.json'
@@ -292,7 +292,7 @@ function encodeAggregateData(
 
 const aggregateAttestation = (overrides: Partial<OnchainAttestation> = {}): OnchainAttestation => ({
   ...attestation(),
-  schemaId: ATTEST_AGGREGATE_SCHEMA_UID,
+  schemaId: ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
   data: encodeAggregateData(),
   ...overrides,
 })
@@ -311,7 +311,7 @@ describe('decodeAttestationData — schema dispatch', () => {
   })
 
   it('decodes an aggregate record with its wallet set and proofs', () => {
-    const decoded = decodeAttestationData(encodeAggregateData(), ATTEST_AGGREGATE_SCHEMA_UID)
+    const decoded = decodeAttestationData(encodeAggregateData(), ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID)
     expect(decoded).toMatchObject({
       version: 2,
       wallet: WALLET,
@@ -326,7 +326,7 @@ describe('decodeAttestationData — schema dispatch', () => {
   })
 
   it('returns null when single-wallet bytes are read as an aggregate', () => {
-    expect(decodeAttestationData(encodeData(), ATTEST_AGGREGATE_SCHEMA_UID)).toBeNull()
+    expect(decodeAttestationData(encodeData(), ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID)).toBeNull()
   })
 })
 

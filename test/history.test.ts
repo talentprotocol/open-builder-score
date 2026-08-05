@@ -5,7 +5,7 @@ import {
   HISTORY_QUERY,
   parseHistoryResponse,
 } from '@/lib/history'
-import { ATTEST_SCHEMA_UID, ATTEST_AGGREGATE_SCHEMA_UID } from '@/lib/eas'
+import { ATTEST_SCHEMA_UID, ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID } from '@/lib/eas'
 import specJson from '../spec/spec.json'
 import type { Spec } from '@/lib/types'
 
@@ -156,7 +156,7 @@ describe('history across both schema versions', () => {
       data: {
         attestations: [
           { id: `0x${'11'.repeat(32)}`, schemaId: ATTEST_SCHEMA_UID, revocationTime: 0, timeCreated: 100, data: singleData },
-          { id: `0x${'22'.repeat(32)}`, schemaId: ATTEST_AGGREGATE_SCHEMA_UID, revocationTime: 0, timeCreated: 200, data: aggregateData },
+          { id: `0x${'22'.repeat(32)}`, schemaId: ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID, revocationTime: 0, timeCreated: 200, data: aggregateData },
         ],
       },
     })
