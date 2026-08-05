@@ -242,17 +242,21 @@ a hash over the data, so a URL naming that UID cannot exist inside it. The earli
 
 `badges` records the slugs earned at scan time. They are zero-point by construction and can
 never move a score. **But two of the four have no permissionless source** —
-`builder_score_100` and `builder_rewards_earned` are dated exports from Talent Protocol's
-database. Recording them onchain is a real departure from "an attestation anyone can verify by
-recomputing," which is why badges were originally excluded.
+**three of the four** touch a dated Talent Protocol export. Recording them onchain is a real
+departure from "an attestation anyone can verify by recomputing," which is why badges were
+originally excluded.
 
-The departure is contained rather than hidden: `classifyAttestedBadges` marks a badge
-re-derivable when it has any non-snapshot check, and the verify screen prints either
-`re-derivable from public data` or `rests on a dated Talent Protocol export — recorded, not
-independently checkable`. `$BUILD Contributor` counts as re-derivable because its checks are
-OR-ed and the live `donated()` read stands alone. An unknown slug stays visible rather than
-being dropped, since hiding it would understate the claim. Only `state === 'earned'` badges are
-written — `unavailable` is not `earned`.
+The departure is contained rather than hidden. `classifyAttestedBadges` returns one of three
+evidence levels, because two would force a false claim: the attestation stores the slug but not
+which check earned it, and `$BUILD Contributor` is an OR of a live `donated()` read and the
+pay-it-forward export. Calling it `public` would overclaim for anyone who earned it only through
+the export, so it is `mixed` — "the record does not say which". `builder_score_100` and
+`builder_rewards_earned` are `export`. Only `talent_token_launched` is `public`, its allowlist
+being rebuilt from `TalentCreated` events on Celo and Polygon by a script anyone can re-run.
+
+An unknown slug stays visible and is classified at the cautious end, since hiding it would
+understate the claim and assuming it public would overstate it. Only `state === 'earned'` badges
+are written — `unavailable` is not `earned`.
 
 **Schema churn, recorded honestly.** #2304 (no URL field, 0 attestations), #2305
 (`verify_url_prefix`, 1 real attestation), #2306 (current). #2305 is kept as a decode-only

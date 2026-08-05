@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   badgeChecks,
+  badgeDefinitions,
+  badgeEvidence,
   classifyAttestedBadges,
   evaluateBadges,
   gatherBadges,
@@ -202,10 +204,10 @@ describe('gatherBadges', () => {
   })
 })
 
-// The $BUILD badge reads the onchain accumulator AND a snapshot: donated()
-// only sees wallets that donated directly, while an allocation sitting on a
-// custody wallet is invisible to it. Either one earning must be enough, and a
-// second check must never overwrite what the first found.
+// No shipped badge carries two checks any more — $BUILD dropped its export —
+// but the fold has to stay correct for the day one does: either check earning
+// must be enough, and a second check must never overwrite what the first
+// found. Covered here off the fixture spec's dual_one.
 describe('badges with more than one check', () => {
   const dual = spec.badges.find((b) => b.slug === 'dual_one')!
 
@@ -257,22 +259,35 @@ describe('badges with more than one check', () => {
 })
 
 describe('classifyAttestedBadges', () => {
-  // An attestation records badge slugs, but two of the four rest on dated
-  // exports from Talent Protocol with no permissionless source. A verifier must
-  // say which it could check rather than implying all were proven.
-  it('marks a badge re-derivable when it has any non-snapshot check', () => {
-    const [talentToken] = classifyAttestedBadges(['talent_token_launched'])
-    expect(talentToken).toMatchObject({ slug: 'talent_token_launched', reDerivable: true })
+  // An attestation records badge slugs but not which check earned them, so the
+  // verifier can only classify by what the badge *could* rest on. Three of the
+  // four touch a dated Talent Protocol export, and claiming otherwise would put
+  // an unfalsifiable label next to an unverifiable claim.
+  const evidenceOf = (slug: string) => classifyAttestedBadges([slug])[0].evidence
 
-    // $BUILD is OR-ed: the live donated() read stands on its own.
-    const [build] = classifyAttestedBadges(['build_contributor'])
-    expect(build.reDerivable).toBe(true)
+  it('calls a badge public only when no check can rest on an export', () => {
+    // The allowlist is rebuilt from TalentCreated events on Celo and Polygon —
+    // public chain history anyone can re-derive.
+    expect(evidenceOf('talent_token_launched')).toBe('public')
+    // $BUILD qualifies too: donated() is a permissionless read.
+    expect(evidenceOf('build_contributor')).toBe('public')
   })
 
-  it('marks snapshot-only badges as not re-derivable', () => {
-    for (const slug of ['builder_score_100', 'builder_rewards_earned']) {
-      expect(classifyAttestedBadges([slug])[0]).toMatchObject({ slug, reDerivable: false })
-    }
+  it('calls an OR-ed badge mixed, because the record does not say which branch fired', () => {
+    // No shipped badge is mixed: $BUILD dropped its export after that export
+    // was found to miss direct donors. The branch is covered off the fixture
+    // spec, where dual_one ORs a live read with a snapshot — calling such a
+    // badge 'public' would overclaim for anyone who earned it via the export.
+    expect(classifyAttestedBadges(['dual_one'], spec)[0].evidence).toBe('mixed')
+  })
+
+  it('calls snapshot-only badges export', () => {
+    expect(evidenceOf('builder_score_100')).toBe('export')
+    expect(evidenceOf('builder_rewards_earned')).toBe('export')
+  })
+
+  it('calls $BUILD public now that it rests on the live read alone', () => {
+    expect(evidenceOf('build_contributor')).toBe('public')
   })
 
   it('carries the display name through and keeps the attested order', () => {
@@ -281,11 +296,21 @@ describe('classifyAttestedBadges', () => {
     expect(out[1].name).toBe('Launched a Talent Token')
   })
 
-  it('keeps an unknown slug visible rather than dropping it', () => {
-    // A future spec could add a badge this build has never heard of; silently
-    // hiding it would understate what the attestation claims.
+  it('treats an unknown slug as export — the cautious end, and keeps it visible', () => {
     const [unknown] = classifyAttestedBadges(['not_a_real_badge'])
-    expect(unknown).toMatchObject({ slug: 'not_a_real_badge', reDerivable: false })
-    expect(unknown.name).toBe('not_a_real_badge')
+    expect(unknown).toMatchObject({ slug: 'not_a_real_badge', name: 'not_a_real_badge', evidence: 'export' })
+  })
+})
+
+describe('badgeEvidence', () => {
+  // The verify screen labels an attested badge off this, so every shipped
+  // badge has to land on one of the three classes — an unclassifiable badge
+  // would render with no provenance at all.
+  it('classifies every badge in the spec', () => {
+    for (const badge of badgeDefinitions) {
+      expect(['public', 'mixed', 'export'], `${badge.slug} unclassified`).toContain(
+        badgeEvidence(badge),
+      )
+    }
   })
 })

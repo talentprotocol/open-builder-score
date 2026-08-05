@@ -36,7 +36,7 @@
       ]
     },
     "eth_global_finalist": {
-      "method": "nft_count",
+      "method": "distinct_contracts_owned",
       "contracts": [
         { "name": "ETHGlobal Cannes Finalist", "chain": "opt-mainnet", "address": "0xd33f107e1d1b3ff9fc57cc9d0c3e7b80ce9e6d07" },
         { "name": "ETHGlobal Prague Finalist", "chain": "opt-mainnet", "address": "0x9c072dd888ada0c4314b1f78d695a503bebd9b4e" },

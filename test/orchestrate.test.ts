@@ -53,7 +53,13 @@ describe('gatherInputs', () => {
       },
       (source) => settled.push(source),
     )
-    expect([...settled].sort()).toEqual(['chains', 'github', 'speedrun', 'verifiedBuilder'])
+    expect([...settled].sort()).toEqual([
+      'chains',
+      'github',
+      'nftCredentials',
+      'speedrun',
+      'verifiedBuilder',
+    ])
   })
 })
 
@@ -113,8 +119,14 @@ describe('gatherMultiInputs', () => {
       },
       (source) => settled.push(source),
     )
-    expect(settled).toHaveLength(4)
-    expect([...settled].sort()).toEqual(['chains', 'github', 'speedrun', 'verifiedBuilder'])
+    expect(settled).toHaveLength(5)
+    expect([...settled].sort()).toEqual([
+      'chains',
+      'github',
+      'nftCredentials',
+      'speedrun',
+      'verifiedBuilder',
+    ])
   })
 
   it('marks a credential unavailable when any wallet could not be checked', async () => {

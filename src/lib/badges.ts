@@ -122,16 +122,37 @@ export async function gatherBadges(
   return evaluateBadges(values, spec, asOf)
 }
 
+/**
+ * What a verifier can say about an attested badge. The attestation records the
+ * slug but not which check earned it, so this classifies by what the badge is
+ * *able* to rest on — the cautious reading.
+ *
+ * - 'public' — every check is permissionless. Only talent_token_launched: its
+ *   allowlist is rebuilt from TalentCreated events on Celo and Polygon.
+ * - 'mixed'  — an OR of a live read and a dated export. $BUILD Contributor is
+ *   earned by donated() > 0 or by the pay-it-forward export, and the record
+ *   does not say which, so it cannot be called public.
+ * - 'export' — the only evidence is a Talent Protocol export with no
+ *   permissionless source.
+ */
+export type BadgeEvidence = 'public' | 'mixed' | 'export'
+
 export interface AttestedBadge {
   slug: string
   name: string
-  /**
-   * True when the badge has at least one check a verifier can run against
-   * public data — an RPC read or the shipped allowlist. False when the only
-   * evidence is a dated Talent Protocol export, which has no permissionless
-   * source and so can only be echoed, never confirmed.
-   */
-  reDerivable: boolean
+  evidence: BadgeEvidence
+}
+
+/**
+ * How strongly a badge can be checked, from its declared checks alone. The
+ * results screen knows no more than a verifier does: gatherBadges ORs a
+ * badge's checks together and keeps no record of which one fired, so a badge
+ * that *can* rest on an export is classified as if it did.
+ */
+export function badgeEvidence(badge: BadgeDefinition): BadgeEvidence {
+  const permissionless = badgeChecks(badge).filter((c) => c !== 'snapshot')
+  if (permissionless.length === 0) return 'export'
+  return usesSnapshot(badge) ? 'mixed' : 'public'
 }
 
 export function classifyAttestedBadges(
@@ -140,12 +161,9 @@ export function classifyAttestedBadges(
 ): AttestedBadge[] {
   return slugs.map((slug) => {
     const def = spec.badges.find((b) => b.slug === slug)
-    // An unknown slug stays visible: hiding it would understate the claim.
-    if (!def) return { slug, name: slug, reDerivable: false }
-    return {
-      slug,
-      name: def.name,
-      reDerivable: badgeChecks(def).some((c) => c !== 'snapshot'),
-    }
+    // An unknown slug stays visible, classified at the cautious end: hiding it
+    // would understate the claim, and assuming it public would overstate it.
+    if (!def) return { slug, name: slug, evidence: 'export' as const }
+    return { slug, name: def.name, evidence: badgeEvidence(def) }
   })
 }

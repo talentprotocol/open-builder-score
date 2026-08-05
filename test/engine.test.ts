@@ -17,12 +17,16 @@ const goldenValues: Record<string, CredentialInput> = {
   eth_global_builder: ok(),                    // no accounts           = 0 (not_earned)
   eth_global_pioneer: ok(0),                   // 0×10                  = 0 (not_earned)
   eth_global_partner: ok(),                    //                       = 0
-  eth_global_finalist: ok(1),                  // min(10, 10)           = 10
+  eth_global_finalist: ok(1),                  // sqrt(1)=1 ×15         = 15
   devfolio_hackathons_participation: ok(9),    // sqrt(9)=3 ×10=30→20   = 20
   base_devfolio_hackathons_participation: ok(1), // sqrt(1)×10          = 10
   buidl_guidl_speedrun_ethereum: ok(4),        // 4×1                   = 4
   buidl_guidl_batches_graduate: ok(1),         // 1×20                  = 20
   talent_protocol_verified_builder: ok(2),     // 2×20=40→20            = 20
+  // Read from the generated allowlist rather than a live call.
+  devfolio_hackathons_won: ok(4),              // sqrt(4)=2 ×15         = 30
+  base_devfolio_hackathons_won: ok(1),         // sqrt(1)=1 ×15         = 15
+  base_basecamp: ok(2),                        // 2×20=40→20            = 20
   // Excluded — scored 7/12/0/3/1/0 = 23 points before the re-cut, 0 now.
   base_learn: ok(7),
   farcaster_farcon_nyc_2025_attendee: ok(1),
@@ -34,7 +38,7 @@ const goldenValues: Record<string, CredentialInput> = {
   github_followers: ok(170),                   // sqrt(170)≈13.04→13→6  = 6
   github_stars: ok(64),                        // sqrt(64)=8 ×0.5       = 4
   github_forks: ok(49),                        // sqrt(49)=7 ×2=14→12   = 12
-  github_repositories: ok(16),                 // sqrt(16)=4 ×2=8       = 8
+  github_repositories: ok(16),                 // sqrt(16)=4 ×1=4       = 4
 }
 
 describe('convert', () => {
@@ -55,18 +59,19 @@ describe('convert', () => {
 describe('computeScore — golden vector', () => {
   const result = computeScore({ computedAt: NOW, values: goldenValues }, spec)
 
-  it('total is 131', () => expect(result.total).toBe(131))
-  it('maxTotal is 196', () => expect(result.maxTotal).toBe(196))
+  it('total is 197', () => expect(result.total).toBe(197))
+  it('maxTotal is 285', () => expect(result.maxTotal).toBe(285))
   it('is complete', () => expect(result.complete).toBe(true))
-  it('covers all 15 active credentials', () => expect(result.perCredential).toHaveLength(15))
+  it('covers all 18 active credentials', () => expect(result.perCredential).toHaveLength(18))
 
   const points = Object.fromEntries(result.perCredential.map((r) => [r.slug, r.points]))
   it.each([
-    ['eth_global_hacker', 12], ['eth_global_finalist', 10],
+    ['eth_global_hacker', 12], ['eth_global_finalist', 15],
     ['devfolio_hackathons_participation', 20],
     ['base_devfolio_hackathons_participation', 10],
     ['buidl_guidl_batches_graduate', 20], ['talent_protocol_verified_builder', 20],
     ['github_account_age', 5], ['github_followers', 6], ['github_forks', 12],
+    ['github_repositories', 4],
   ])('%s = %i points', (slug, expected) => expect(points[slug]).toBe(expected))
 
   it('scores no excluded credential, even with a value supplied', () => {
@@ -104,13 +109,34 @@ describe('computeScore — golden vector', () => {
 
 describe('computeScore — calculation modes', () => {
   it('sum_all sums raw values BEFORE converting', () => {
-    // github_forks: sqrt, ×2, max 12. Correct: sqrt(16+9)=5 → 10.
+    // Since spec 0.3.0 no active credential uses sum_all (github_forks and
+    // github_repositories moved to max_value to close multi-account
+    // stacking), so the order-of-operations proof runs on a local spec.
+    // sqrt, ×2, max 12. Correct: sqrt(16+9)=5 → 10.
     // Wrong (convert-then-sum): sqrt(16)+sqrt(9)=7 → 14 → clamped 12.
-    const r = computeScore(
-      { computedAt: NOW, values: { ...goldenValues, github_forks: ok(16, 9) } },
-      spec,
-    )
-    expect(r.perCredential.find((c) => c.slug === 'github_forks')!.points).toBe(10)
+    const sumSpec: Spec = {
+      name: 'test',
+      version: 'test',
+      constants: { SECONDS_IN_A_YEAR: YEAR },
+      credentials: [
+        { slug: 'sum_sqrt', name: 'Sum sqrt', tier: 'rpc', value: 'v', max_score: 12, multiplier: 2, conversion: 'sqrt', calculation: 'sum_all', status: 'active' },
+      ],
+    }
+    const r = computeScore({ computedAt: NOW, values: { sum_sqrt: ok(16, 9) } }, sumSpec)
+    expect(r.perCredential.find((c) => c.slug === 'sum_sqrt')!.points).toBe(10)
+  })
+
+  it('grades repeat finalists on the judged-results curve', () => {
+    // eth_global_finalist since 0.3.0: sqrt ×15 max 30. n=1 → 15, n=2 →
+    // round(1.414×15)=21, n=4 → 30. One finalist NFT no longer maxes it.
+    const at = (n: number) =>
+      computeScore(
+        { computedAt: NOW, values: { ...goldenValues, eth_global_finalist: ok(n) } },
+        spec,
+      ).perCredential.find((c) => c.slug === 'eth_global_finalist')!.points
+    expect(at(1)).toBe(15)
+    expect(at(2)).toBe(21)
+    expect(at(4)).toBe(30)
   })
 
   it('max_value converts per account and takes the best', () => {
@@ -134,7 +160,7 @@ describe('computeScore — unavailable propagation', () => {
   }
   const result = computeScore({ computedAt: NOW, values }, spec)
 
-  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(131))
+  it('keeps the total of the remaining credentials', () => expect(result.total).toBe(197))
   it('marks the result incomplete', () => expect(result.complete).toBe(false))
   it('carries the reason', () => {
     const pioneer = result.perCredential.find((r) => r.slug === 'eth_global_pioneer')!
@@ -155,7 +181,7 @@ describe('computeScore — unavailable propagation', () => {
       spec,
     )
     expect(r.complete).toBe(true)
-    expect(r.total).toBe(131)
+    expect(r.total).toBe(197)
   })
 
   it('treats a missing slug as unavailable', () => {

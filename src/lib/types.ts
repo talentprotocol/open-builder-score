@@ -25,6 +25,7 @@ export interface SpecCredential {
 export interface Spec {
   name: string
   version: string
+  changelog?: Record<string, string>
   constants: { SECONDS_IN_A_YEAR: number }
   credentials: SpecCredential[]
 }
@@ -132,6 +133,24 @@ export interface BadgeResult {
   state: BadgeState
   unavailableReason?: string
   asOf?: string | null          // snapshot badges only — the export date
+}
+
+export interface NftCredentialManifest {
+  generated_at: string
+  source: string
+  generator: string
+  frozen_because: string
+  shards: number
+  credentials: Record<
+    string,
+    {
+      unit: string
+      wallets: number
+      tokens_scanned: number
+      incomplete?: { address: string; chain: string; swept: number; holders: number }[]
+      contracts: Record<string, { chain: string; tokens: number; owners?: number; source?: string; skipped?: string }>
+    }
+  >
 }
 
 export interface SnapshotMeta {

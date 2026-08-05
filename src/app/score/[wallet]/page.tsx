@@ -38,6 +38,7 @@ const CHAIN_COUNT = scannedChainCount(spec)
 
 const SOURCE_LABELS: Record<ScanSource, string> = {
   chains: `Onchain badges & balances (${CHAIN_COUNT} chains)`,
+  nftCredentials: 'Hackathon & event NFTs',
   github: 'GitHub',
   speedrun: 'SpeedRun Ethereum',
   verifiedBuilder: 'EAS attestations',

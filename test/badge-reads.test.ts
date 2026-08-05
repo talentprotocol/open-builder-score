@@ -9,6 +9,9 @@ import {
   type BadgeChainPlan,
 } from '@/lib/badge-reads'
 import { CHAIN_CONFIG, CHAIN_IDS } from '@/lib/chains'
+import { badgeChecks } from '@/lib/badges'
+import badgeSpecJson from '../spec/badges.json'
+import type { BadgeSpec } from '@/lib/types'
 
 const plan: BadgeChainPlan = {
   chainId: 42220,
@@ -123,6 +126,14 @@ describe('the shipped badge spec', () => {
     expect(build?.address.toLowerCase()).toBe('0x556e182ad2b72f5934c2215d6a56cfc19936fdb7')
     expect(build?.functionName).toBe('donated')
     expect(build?.method).toBe('positive_uint_call')
+  })
+
+  it('reads $BUILD live and consults no export', () => {
+    // The export missed direct donors outright: its only branch that saw them
+    // was the build_contribution data point, and that credential was retired,
+    // so its data points cascade-deleted. donated() is the working source.
+    const build = (badgeSpecJson as BadgeSpec).badges.find((b) => b.slug === 'build_contributor')!
+    expect(badgeChecks(build)).toEqual(['rpc'])
   })
 
   it('does not try to read the Talent Token badge per wallet', () => {

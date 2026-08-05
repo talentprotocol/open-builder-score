@@ -3,6 +3,7 @@ import { readChainCredentials, type ChainReadResult } from './chains'
 import { readGithubCredentials } from './github'
 import { readSpeedrunCredential } from './speedrun'
 import { readVerifiedBuilder } from './easscan'
+import { readNftCredentials } from './nft-credentials'
 import type { BadgeResult, CredentialInput, EngineInputs, ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
@@ -29,6 +30,7 @@ export interface Fetchers {
   github: (handle: string | null) => Promise<Record<string, CredentialInput>>
   speedrun: (address: string) => Promise<CredentialInput>
   verifiedBuilder: (address: string) => Promise<CredentialInput>
+  nftCredentials: (address: string) => Promise<Record<string, CredentialInput>>
 }
 
 const defaultFetchers: Fetchers = {
@@ -36,9 +38,10 @@ const defaultFetchers: Fetchers = {
   github: readGithubCredentials,
   speedrun: readSpeedrunCredential,
   verifiedBuilder: readVerifiedBuilder,
+  nftCredentials: (address) => readNftCredentials(address),
 }
 
-export type GatherSource = 'chains' | 'github' | 'speedrun' | 'verifiedBuilder'
+export type GatherSource = 'chains' | 'github' | 'speedrun' | 'verifiedBuilder' | 'nftCredentials'
 
 // Two per-wallet results for the same credential become one: accounts
 // concatenate in wallet order; if either wallet couldn't be checked the
@@ -68,11 +71,12 @@ export async function gatherMultiInputs(
   const settle = <T,>(source: GatherSource, promise: Promise<T>): Promise<T> =>
     promise.finally(() => onSourceSettled?.(source))
 
-  const [chainResults, github, speedruns, verifiedBuilders] = await Promise.all([
+  const [chainResults, github, speedruns, verifiedBuilders, nftResults] = await Promise.all([
     settle('chains', Promise.all(addresses.map((a) => f.chains(a, activeRpcSlugs)))),
     settle('github', f.github(githubHandle)),
     settle('speedrun', Promise.all(addresses.map((a) => f.speedrun(a)))),
     settle('verifiedBuilder', Promise.all(addresses.map((a) => f.verifiedBuilder(a)))),
+    settle('nftCredentials', Promise.all(addresses.map((a) => f.nftCredentials(a)))),
   ])
 
   const chainValues: Record<string, CredentialInput> = {}
@@ -83,11 +87,22 @@ export async function gatherMultiInputs(
     }
   }
 
+  // Same fold as the chain reads, and the same rule inside
+  // mergeCredentialInputs: one wallet that couldn't be checked leaves the
+  // credential unavailable rather than letting the others report a clean zero.
+  const nftValues: Record<string, CredentialInput> = {}
+  for (const perWallet of nftResults) {
+    for (const [slug, input] of Object.entries(perWallet)) {
+      nftValues[slug] = slug in nftValues ? mergeCredentialInputs(nftValues[slug], input) : input
+    }
+  }
+
   return {
     inputs: {
       computedAt,
       values: {
         ...chainValues,
+        ...nftValues,
         ...github,
         buidl_guidl_speedrun_ethereum: speedruns.reduce(mergeCredentialInputs),
         talent_protocol_verified_builder: verifiedBuilders.reduce(mergeCredentialInputs),

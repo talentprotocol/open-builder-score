@@ -46,3 +46,4 @@ next-env.d.ts
 # raw badge snapshot exports — the sharded output under public/snapshots is
 # what ships; these are reproducible from talent-api and stay out of git
 /exports
+/tmp

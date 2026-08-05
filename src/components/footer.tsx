@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@phosphor-icons/react/dist/ssr'
 import { ATTEST_SCHEMA_UID, EASSCAN_SITE } from '@/lib/eas'
-import { credentialsPath, verifyPath } from '@/lib/routes'
+import { badgesPath, credentialsPath, verifyPath } from '@/lib/routes'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -23,6 +23,12 @@ export function Footer() {
             className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
           >
             Credentials
+          </Link>
+          <Link
+            href={badgesPath()}
+            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            Badges
           </Link>
           <Link
             href={verifyPath()}
