@@ -6,6 +6,7 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isAttesterInSet,
   isSelfAttested,
   parseAttestationResponse,
   scoreVerdict,
@@ -14,8 +15,10 @@ import {
 } from '@/lib/verify'
 import {
   ATTEST_SCHEMA_UID,
+  ATTEST_AGGREGATE_SCHEMA_UID,
   ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
+  encodeAggregateAttestationData,
 } from '@/lib/eas'
 import specJson from '../spec/spec.json'
 import type { ScoreResult, Spec } from '@/lib/types'
@@ -92,6 +95,8 @@ describe('decodeAttestationData', () => {
       wallet: WALLET,
       extraWallets: [],
       ownershipProofs: [],
+      recipientProof: null,
+      proofsIssuedAt: null,
       verifyUrl: null,
       badges: [],
       githubHandle: 'octocat',
@@ -297,6 +302,21 @@ const aggregateAttestation = (overrides: Partial<OnchainAttestation> = {}): Onch
   ...overrides,
 })
 
+// v3: adds the recipient proof slot and the shared proofs_issued_at anchor.
+const dataV3 = encodeAggregateAttestationData({
+  specVersion: spec.version,
+  wallet: WALLET,
+  extraWallets: [EXTRA_A, EXTRA_B],
+  ownershipProofs: [`0x${'11'.repeat(65)}`, `0x${'22'.repeat(65)}`],
+  recipientProof: '0x' as `0x${string}`,
+  proofsIssuedAt: 1784975866,
+  githubHandle: 'octocat',
+  score: 103,
+  computedAt: 1784975866,
+  blockNumber: 49093260n,
+  badges: ['talent_token_launched'],
+})
+
 describe('decodeAttestationData — schema dispatch', () => {
   it('decodes a single-wallet record with empty wallet-set fields', () => {
     const decoded = decodeAttestationData(encodeData(), ATTEST_SCHEMA_UID)
@@ -428,5 +448,36 @@ describe('superseded aggregate schema stays verifiable', () => {
   it('classifies it as ok, so the ownership proof still shows', () => {
     const att = attestation({ schemaId: ATTEST_AGGREGATE_LEGACY_SCHEMA_UID, data: legacyData })
     expect(classifyAttestation(att, decodeAttestationData(att.data, att.schemaId)).kind).toBe('ok')
+  })
+})
+
+describe('v3 aggregate decode', () => {
+  it('surfaces the recipient proof and the anchor', () => {
+    const decoded = decodeAttestationData(dataV3, ATTEST_AGGREGATE_SCHEMA_UID)
+    expect(decoded?.recipientProof).toBe('0x')
+    expect(decoded?.proofsIssuedAt).toBe(1784975866)
+    expect(decoded?.version).toBe(2)
+  })
+
+  it('marks every legacy aggregate decode with a null anchor', () => {
+    const decodedLegacy = decodeAttestationData(
+      encodeAggregateData(),
+      ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
+    )
+    expect(decodedLegacy?.recipientProof).toBeNull()
+    expect(decodedLegacy?.proofsIssuedAt).toBeNull()
+  })
+})
+
+describe('isAttesterInSet', () => {
+  const att = aggregateAttestation({ schemaId: ATTEST_AGGREGATE_SCHEMA_UID, data: dataV3 })
+  const decoded = decodeAttestationData(att.data, att.schemaId)!
+
+  it('accepts the recipient, any extra, and rejects outsiders', () => {
+    expect(isAttesterInSet({ ...att, attester: decoded.wallet }, decoded)).toBe(true)
+    expect(isAttesterInSet({ ...att, attester: decoded.extraWallets[0] }, decoded)).toBe(true)
+    expect(
+      isAttesterInSet({ ...att, attester: '0x000000000000000000000000000000000000dEaD' }, decoded),
+    ).toBe(false)
   })
 })

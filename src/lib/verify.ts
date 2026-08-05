@@ -3,6 +3,8 @@ import specJson from '../../spec/spec.json'
 import {
   ATTEST_AGGREGATE_LEGACY_SCHEMA,
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
+  ATTEST_AGGREGATE_SCHEMA,
+  ATTEST_AGGREGATE_SCHEMA_UID,
   ATTEST_AGGREGATE_SCORE_URL_SCHEMA,
   ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID,
   ATTEST_AGGREGATE_VERIFY_URL_SCHEMA,
@@ -21,6 +23,7 @@ export const EASSCAN_GRAPHQL = `${EASSCAN_SITE}/graphql`
 
 // Derived from the canonical schema strings so the decoder can never drift from eas.ts.
 const SCHEMA_PARAMS = parseAbiParameters(ATTEST_SCHEMA)
+const AGGREGATE_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCHEMA)
 const AGGREGATE_VERIFY_URL_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_VERIFY_URL_SCHEMA)
 const AGGREGATE_LEGACY_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_LEGACY_SCHEMA)
 const AGGREGATE_SCORE_URL_SCHEMA_PARAMS = parseAbiParameters(ATTEST_AGGREGATE_SCORE_URL_SCHEMA)
@@ -56,6 +59,10 @@ export interface DecodedScoreAttestation {
   /** Empty for a single-wallet attestation. Index i pairs with ownershipProofs[i]. */
   extraWallets: `0x${string}`[]
   ownershipProofs: `0x${string}`[]
+  /** v3 aggregates: the recipient's proof slot ('0x' when the recipient sent the tx). Null on older schemas. */
+  recipientProof: `0x${string}` | null
+  /** v3 aggregates: the shared EIP-712 anchor the proofs bind. Null on older schemas — those bound computedAt. */
+  proofsIssuedAt: number | null
   githubHandle: string | null
   score: number
   computedAt: number
@@ -153,12 +160,48 @@ export function decodeAttestationData(
         wallet,
         extraWallets: [],
         ownershipProofs: [],
+        recipientProof: null,
+        proofsIssuedAt: null,
         githubHandle: githubHandle === '' ? null : githubHandle,
         score,
         computedAt: Number(computedAt),
         blockNumber,
         verifyUrl: null,
         badges: [],
+      }
+    }
+    // v3 — any wallet of the set may send the attestation. The sender's own
+    // proof slot is '0x' (msg.sender is its proof); every proof binds
+    // proofs_issued_at rather than computed_at.
+    if (uid === ATTEST_AGGREGATE_SCHEMA_UID.toLowerCase()) {
+      const [
+        specVersion,
+        wallet,
+        extraWallets,
+        ownershipProofs,
+        recipientProof,
+        proofsIssuedAt,
+        githubHandle,
+        score,
+        computedAt,
+        blockNumber,
+        verifyUrl,
+        badges,
+      ] = decodeAbiParameters(AGGREGATE_SCHEMA_PARAMS, data)
+      return {
+        version: 2,
+        specVersion,
+        wallet,
+        extraWallets: [...extraWallets],
+        ownershipProofs: [...ownershipProofs],
+        recipientProof,
+        proofsIssuedAt: Number(proofsIssuedAt),
+        githubHandle: githubHandle === '' ? null : githubHandle,
+        score,
+        computedAt: Number(computedAt),
+        blockNumber,
+        verifyUrl: verifyUrl === '' ? null : verifyUrl,
+        badges: [...badges],
       }
     }
     if (uid === ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID.toLowerCase()) {
@@ -180,6 +223,8 @@ export function decodeAttestationData(
         wallet,
         extraWallets: [...extraWallets],
         ownershipProofs: [...ownershipProofs],
+        recipientProof: null,
+        proofsIssuedAt: null,
         githubHandle: githubHandle === '' ? null : githubHandle,
         score,
         computedAt: Number(computedAt),
@@ -200,6 +245,8 @@ export function decodeAttestationData(
         wallet,
         extraWallets: [...extraWallets],
         ownershipProofs: [...ownershipProofs],
+        recipientProof: null,
+        proofsIssuedAt: null,
         githubHandle: githubHandle === '' ? null : githubHandle,
         score,
         computedAt: Number(computedAt),
@@ -217,6 +264,8 @@ export function decodeAttestationData(
         wallet,
         extraWallets: [...extraWallets],
         ownershipProofs: [...ownershipProofs],
+        recipientProof: null,
+        proofsIssuedAt: null,
         githubHandle: githubHandle === '' ? null : githubHandle,
         score,
         computedAt: Number(computedAt),
@@ -310,6 +359,21 @@ export function isSelfAttested(
 ): boolean {
   try {
     return getAddress(att.attester) === getAddress(decoded.wallet)
+  } catch {
+    return false
+  }
+}
+
+// v3 aggregates: the attester needs no stored proof, but only if it is one of
+// the attested wallets. An outside attester is tolerated structurally — then
+// every wallet must carry a proof, which the ownership display shows.
+export function isAttesterInSet(
+  att: OnchainAttestation,
+  decoded: DecodedScoreAttestation,
+): boolean {
+  try {
+    const attester = getAddress(att.attester)
+    return [decoded.wallet, ...decoded.extraWallets].some((w) => getAddress(w) === attester)
   } catch {
     return false
   }
