@@ -25,6 +25,7 @@ export interface SpecCredential {
 export interface Spec {
   name: string
   version: string
+  changelog?: Record<string, string>
   constants: { SECONDS_IN_A_YEAR: number }
   credentials: SpecCredential[]
 }

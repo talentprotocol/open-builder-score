@@ -17,14 +17,17 @@ describe('spec.json', () => {
 
   // Pinned so that adding a badge can never quietly widen the score. Badges
   // are zero-point; if this number moves, something entered the scoring
-  // contract that should not have. It last moved from 196 to 276 when the
-  // three NFT-metadata credentials stopped being deferred — 80 points that
-  // needed an allowlist rebuilt from chain data before they could be scored.
-  it('still tops out at 276 points', () => {
+  // contract that should not have. Moved from 196 to 276 when the three
+  // NFT-metadata credentials stopped being deferred — 80 points that needed
+  // an allowlist rebuilt from chain data before they could be scored. Moved
+  // from 276 to 285 in spec 0.3.0: eth_global_finalist re-cut to the
+  // judged-results curve (+20), the two frozen Base Devfolio caps lowered to
+  // their attainable maxima (−7), github_repositories halved (−4).
+  it('still tops out at 285 points', () => {
     const maxTotal = spec.credentials
       .filter((c) => c.status === 'active')
       .reduce((sum, c) => sum + c.max_score, 0)
-    expect(maxTotal).toBe(276)
+    expect(maxTotal).toBe(285)
   })
 
   // Pinned so that re-admitting one of these is a deliberate edit rather than
@@ -64,6 +67,25 @@ describe('spec.json', () => {
 
   it('pins SECONDS_IN_A_YEAR to the production constant', () => {
     expect(spec.constants.SECONDS_IN_A_YEAR).toBe(31_536_000)
+  })
+
+  // Every sqrt credential backed by a frozen contract list must be able to
+  // reach its own cap. Shipped broken once: base_devfolio_* carried caps of
+  // 20/30 with only 3 contracts in the manifest, so the advertised maximum
+  // was unreachable (round(10×√3)=17, round(15×√3)=26).
+  it('every frozen-list sqrt credential can reach its cap', () => {
+    for (const c of spec.credentials) {
+      if (c.status !== 'active' || c.conversion !== 'sqrt') continue
+      let entry = registry.credentials[c.slug]
+      if (!entry) continue
+      if (typeof entry.contracts === 'string') {
+        const ref = entry.contracts.replace(/^same as /, '')
+        entry = registry.credentials[ref]
+      }
+      if (!Array.isArray(entry?.contracts)) continue
+      const best = Math.round(c.multiplier * Math.sqrt(entry.contracts.length))
+      expect(best, `${c.slug}: cap ${c.max_score} unreachable with ${entry.contracts.length} contracts`).toBeGreaterThanOrEqual(c.max_score)
+    }
   })
 })
 
