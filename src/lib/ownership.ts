@@ -2,9 +2,10 @@
 // the set must be proven — by an EIP-712 signature stored in the attestation,
 // or by being the transaction sender EAS records as the attester.
 //
-// The primary wallet needs no proof: EAS records the attester as msg.sender, so
-// the attestation transaction is its proof. Wallets 2-5 have no msg.sender, so
-// each signs an EIP-712 message and the signature goes *into* the attestation.
+// Whichever wallet sends the attestation needs no proof: EAS records the
+// attester as msg.sender, so the attestation transaction is its proof. Every
+// other wallet in the set has no msg.sender, so each signs an EIP-712 message
+// and the signature goes *into* the attestation.
 // That is the whole difference from a SIWE personal_sign: the signature leaves
 // the browser and lands onchain, where anyone can check it — for EOAs, forever
 // and without a network call.
@@ -16,14 +17,15 @@ import { clientFor } from './chains'
 export const MAX_EXTRA_WALLETS = 4
 
 // The window's job is to kill year-old proofs, not to be a nonce — replay into
-// someone else's aggregate is already impossible, since primary and the whole
-// wallet set are bound into the message. A day is long enough that a user who
-// leaves the tab open over lunch doesn't hit a confusing dead end.
+// someone else's aggregate is already impossible, since the recipient and the
+// whole wallet set are bound into the message. A day is long enough that a
+// user who leaves the tab open over lunch doesn't hit a confusing dead end.
 export const OWNERSHIP_PROOF_TTL_SECONDS = 86_400
 
 export const OWNERSHIP_DOMAIN_NAME = 'Open Builder Score'
 
-// v2: recipient/issuedAt replace primary/computedAt. The ownership claim is
+// v2 renames the v1 message fields — the exempt wallet becomes `recipient`,
+// and `computedAt` becomes `issuedAt`. The ownership claim is
 // about wallets, not about the score — so the proof anchors to its own issue
 // time, which is what lets signatures survive reloads and re-scans. The
 // typehash changes with the field names, so a v1 signature can never validate

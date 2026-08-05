@@ -54,7 +54,7 @@ export interface DecodedScoreAttestation {
   /** 1 = single wallet, 2 = aggregate. */
   version: 1 | 2
   specVersion: string
-  /** The primary wallet. EAS records the attester as msg.sender, so this is the one proved by the transaction. */
+  /** The recipient — the wallet the score is issued to. Proven by msg.sender when it sends the transaction itself, or by its own proof in a v3 aggregate; see recipientProof. */
   wallet: `0x${string}`
   /** Empty for a single-wallet attestation. Index i pairs with ownershipProofs[i]. */
   extraWallets: `0x${string}`[]
@@ -334,9 +334,9 @@ function aggregateStructureProblems(decoded: DecodedScoreAttestation): string[] 
   }
 
   try {
-    const primary = getAddress(decoded.wallet)
-    if (extraWallets.some((w) => getAddress(w) === primary)) {
-      problems.push('an extra wallet repeats the primary wallet')
+    const recipient = getAddress(decoded.wallet)
+    if (extraWallets.some((w) => getAddress(w) === recipient)) {
+      problems.push('an extra wallet repeats the recipient wallet')
     }
   } catch {
     problems.push('an extra wallet is not a valid address')

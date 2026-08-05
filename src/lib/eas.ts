@@ -13,7 +13,7 @@ export const SCHEMA_REGISTRY_ADDRESS = '0x42000000000000000000000000000000000000
 export const ATTEST_SCHEMA =
   'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number'
 
-// Aggregate (multi-wallet) scores. `wallet` stays the primary — it keeps the
+// Aggregate (multi-wallet) scores. `wallet` stays the recipient — it keeps the
 // recipient == wallet invariant, keeps isSelfAttested unchanged, and leaves
 // ownership_proofs[i] a clean 1:1 with extra_wallets[i].
 //
@@ -23,7 +23,7 @@ export const ATTEST_SCHEMA =
 // unwrapped: the wrapper is what makes a counterfactual signature verifiable.
 // verify_url points at the verification view for this wallet, not at a fresh
 // scoring run — someone reading the record wants what was verified, not a new
-// computation. It is keyed on the primary wallet rather than on this
+// computation. It is keyed on the recipient wallet rather than on this
 // attestation's UID because an attestation cannot contain a link to itself:
 // EAS hashes both the record's own data AND block.timestamp into the UID, so
 // the UID is neither self-containable nor knowable before the tx is mined.
@@ -197,8 +197,8 @@ export async function attestAggregateScore(
   const tx = await eas.attest({
     schema: ATTEST_AGGREGATE_SCHEMA_UID,
     data: {
-      // Recipient is the primary, so history and the percentile corpus stay
-      // keyed the same way they are for single-wallet attestations.
+      // The recipient anchors history and the percentile corpus the same way
+      // it does for single-wallet attestations.
       recipient: params.recipient,
       expirationTime: NO_EXPIRATION,
       revocable: true,

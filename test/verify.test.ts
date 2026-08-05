@@ -373,8 +373,8 @@ describe('validateAttestation — aggregate structure', () => {
     expect(problemsFor({ extraWallets: [EXTRA_A, EXTRA_A] }).join(' ')).toMatch(/ascending/i)
   })
 
-  it('rejects an extra that repeats the primary', () => {
-    expect(problemsFor({ extraWallets: [WALLET, EXTRA_B] }).join(' ')).toMatch(/primary/i)
+  it('rejects an extra that repeats the recipient', () => {
+    expect(problemsFor({ extraWallets: [WALLET, EXTRA_B] }).join(' ')).toMatch(/recipient/i)
   })
 
   it('rejects more extras than the wallet cap allows', () => {
@@ -396,7 +396,7 @@ describe('ownership and score correctness stay independent facts', () => {
     expect(classifyAttestation(att, decoded).kind).toBe('ok')
   })
 
-  it('checks self-attestation against the primary wallet', () => {
+  it('checks self-attestation against the recipient wallet', () => {
     const att = aggregateAttestation()
     const decoded = decodeAttestationData(att.data, att.schemaId)!
     expect(isSelfAttested(att, decoded)).toBe(true)

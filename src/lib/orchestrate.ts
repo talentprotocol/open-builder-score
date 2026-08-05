@@ -108,7 +108,7 @@ export async function gatherMultiInputs(
         talent_protocol_verified_builder: verifiedBuilders.reduce(mergeCredentialInputs),
       },
     },
-    // The as-of anchor stays the primary wallet's.
+    // The as-of anchor stays the recipient wallet's.
     baseBlockNumber: chainResults[0].baseBlockNumber,
   }
 }

@@ -125,16 +125,16 @@ export default function ResultsPage({
             })
             return
           }
-          const [primary, ...rest] = resolved.map(
+          const [recipient, ...rest] = resolved.map(
             ({ result }) => (result as { address: `0x${string}` }).address,
           )
-          const seen = new Set([primary.toLowerCase()])
+          const seen = new Set([recipient.toLowerCase()])
           const deduped = rest.filter((a) => {
             if (seen.has(a.toLowerCase())) return false
             seen.add(a.toLowerCase())
             return true
           })
-          router.replace(scorePath(primary, githubHandle, deduped))
+          router.replace(scorePath(recipient, githubHandle, deduped))
         })()
       } else {
         setState({

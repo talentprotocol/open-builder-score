@@ -99,7 +99,7 @@ describe('credentialsPath', () => {
 
 describe('verifyWalletPath', () => {
   // An attestation cannot contain a link to itself: EAS hashes both the data and
-  // block.timestamp into the UID. Keying on the primary wallet is the closest
+  // block.timestamp into the UID. Keying on the recipient wallet is the closest
   // thing that is fully known before the record exists, and it lands on the
   // verify view rather than starting a fresh scoring run.
   it('builds a wallet-keyed verify path', () => {

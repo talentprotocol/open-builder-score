@@ -11,7 +11,7 @@ import { SweepOverlay } from '@/components/motion/sweep-overlay'
 
 // An attestation cannot link to itself — EAS hashes the record's own data and
 // block.timestamp into the UID — so `verify_url` points here instead, keyed on
-// the primary wallet, which is known before the record exists. This resolves to
+// the recipient wallet, which is known before the record exists. This resolves to
 // that wallet's most recent attestation and hands off to the verify view.
 type State = { phase: 'loading' } | { phase: 'error'; reason: string } | { phase: 'none' }
 

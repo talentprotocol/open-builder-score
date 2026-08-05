@@ -50,7 +50,7 @@ export function parseCorpusPage(raw: unknown): CorpusEntry[] | null {
     if (typeof a.recipient !== 'string' || typeof a.data !== 'string') continue
     // v1 only, and the corpus query filters to v1: mixing 1-wallet and 5-wallet
     // totals is not like-for-like, and latestPerWallet keys on recipient, so an
-    // aggregate would silently displace the primary's single-wallet score.
+    // aggregate would silently displace the recipient's single-wallet score.
     const decoded = decodeAttestationData(a.data as `0x${string}`, ATTEST_SCHEMA_UID)
     if (decoded === null) continue
     const timeCreated = Number(a.timeCreated ?? 0)
