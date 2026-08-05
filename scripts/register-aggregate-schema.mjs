@@ -25,7 +25,10 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { baseSepolia } from 'viem/chains'
 
 const SCHEMA_REGISTRY = '0x4200000000000000000000000000000000000020'
-const EXPECTED_UID = '0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2'
+// Task 10 (2026-08-05): retargeted from the prior schema generation's UID
+// (0x01d83b22...a2, the now-demoted verify_url schema, registered 2026-08-04)
+// to the current v3 ATTEST_AGGREGATE_SCHEMA golden pin in test/eas.test.ts.
+const EXPECTED_UID = '0x9bba0ee6d4f74ab182e84e86c5c873ac5a37ef97f98ff7750f5dec7c3ac1edc7'
 
 const REGISTRY_ABI = parseAbi([
   'function register(string schema, address resolver, bool revocable) returns (bytes32)',

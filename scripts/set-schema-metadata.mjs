@@ -23,7 +23,9 @@ const NAME_SCHEMA = '0x44d562ac1d7cd77e232978687fea027ace48f719cf1d58c7888e50966
 const DESCRIPTION_SCHEMA = '0x21cbc60aac46ba22125ff85dd01882ebe6e87eb4fc46628589931ccbef9b8c94'
 
 const SINGLE_UID = '0x38b1a4ab5bee04789565591b11646eb0f5269096f65ef0b24e817f2b6168d1cd'
-const AGGREGATE_UID = '0x01d83b22aca3881b6673513b0e29fec6659a7def03c69fa41c55a16bcaf192a2'
+// Task 10 (2026-08-05): retargeted from the prior schema generation's UID
+// (0x01d83b22...a2, the now-demoted verify_url schema) to v3, schema #2308.
+const AGGREGATE_UID = '0x9bba0ee6d4f74ab182e84e86c5c873ac5a37ef97f98ff7750f5dec7c3ac1edc7'
 
 // Kept in sync with SITE_ORIGIN in src/lib/routes.ts — read, not duplicated.
 function siteOrigin() {
@@ -47,15 +49,18 @@ const ALL_ENTRIES = [
       'Aggregate multi-wallet Builder Score from Open Builder Score, by Talent Protocol. ' +
       'The score is computed in the browser from public data and can be recomputed by anyone. ' +
       'extra_wallets holds the other wallets in the aggregate, and ownership_proofs[i] is an ' +
-      'EIP-712 WalletOwnership signature by extra_wallets[i] binding it to this primary wallet ' +
-      'and scan, so the wallet set is checkable without trusting us. The attester is the primary ' +
-      'wallet. verify_url opens the verification view for this wallet - what was verified, not a ' +
-      'fresh scoring run. It is keyed on the primary wallet rather than this attestation UID ' +
-      'because EAS hashes both the record data and the block timestamp into the UID, so an ' +
-      'attestation can never contain a link to itself. badges lists ' +
-      'zero-point achievements earned at scan time: they never affect the score, and two of them ' +
-      'rest on dated Talent Protocol exports with no permissionless source, so a verifier can ' +
-      `re-derive some and only echo the rest. App: ${ORIGIN}`,
+      'EIP-712 WalletOwnership signature by extra_wallets[i] binding it to this recipient wallet ' +
+      'and scan, so the wallet set is checkable without trusting us. Any wallet in the set may ' +
+      'send the attestation - the sender needs no stored proof, since EAS itself records it as ' +
+      "the attester. recipient_ownership_proof holds the recipient's proof when an extra wallet " +
+      'sends instead, so exactly one proof slot across the record is empty: the ' +
+      "sender's. proofs_issued_at is the shared EIP-712 anchor every proof binds to. verify_url " +
+      'opens the verification view for this wallet - what was verified, not a fresh scoring run. ' +
+      'It is keyed on the recipient wallet rather than this attestation UID because EAS hashes ' +
+      'both the record data and the block timestamp into the UID, so an attestation can never ' +
+      'contain a link to itself. badges lists zero-point achievements earned at scan time: they ' +
+      'never affect the score, and two of them rest on dated Talent Protocol exports with no ' +
+      `permissionless source, so a verifier can re-derive some and only echo the rest. App: ${ORIGIN}`,
   },
   {
     uid: SINGLE_UID,

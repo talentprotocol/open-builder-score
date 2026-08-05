@@ -54,8 +54,9 @@ describe('aggregate schema UID', () => {
     expect(uid).toBe(ATTEST_AGGREGATE_SCHEMA_UID)
   })
 
-  it('matches the schema registered on Base Sepolia', () => {
-    // Golden pin: verified on-chain against the Registered event and easscan.
+  it('matches the schema registered on Base Sepolia (schema #2308, 2026-08-05)', () => {
+    // Golden pin: verified on-chain against the Registered event and easscan
+    // (tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76).
     expect(ATTEST_AGGREGATE_SCHEMA_UID).toBe(
       '0x9bba0ee6d4f74ab182e84e86c5c873ac5a37ef97f98ff7750f5dec7c3ac1edc7',
     )

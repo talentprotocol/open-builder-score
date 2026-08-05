@@ -41,6 +41,10 @@ export const ATTEST_SCHEMA =
 // recipient sends, or that extra's ownership_proofs slot. proofs_issued_at is
 // the shared EIP-712 anchor every signature binds; a forged value makes every
 // proof fail recovery, so it cannot be quietly edited.
+//
+// Registered on Base Sepolia (2026-08-05) as schema #2308, resolver 0x0, revocable.
+// tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76.
+// Golden-pinned in test/eas.test.ts, verified against SchemaRegistry.getSchema and easscan.
 export const ATTEST_AGGREGATE_SCHEMA =
   'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,bytes recipient_ownership_proof,uint64 proofs_issued_at,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
 
