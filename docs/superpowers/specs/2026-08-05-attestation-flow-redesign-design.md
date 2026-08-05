@@ -89,6 +89,13 @@ message WalletOwnership { statement, wallet, recipient, wallets[], issuedAt, exp
   attestation landed. EAS writes `timeCreated`, so this caps future-dating the
   anchor to stretch the window — a hole `computedAt` technically shared and
   nothing exploited, closed while the message is being re-cut anyway.
+- The lower bound carries a 10-minute skew allowance
+  (`ISSUED_AT_SKEW_ALLOWANCE_SECONDS`): `issuedAt` is minted from the client's
+  clock, but this check runs against the chain clock (`att.timeCreated`). A
+  client clock running fast would otherwise brand an honest proof "expired"
+  the instant it landed onchain — silently at attest, permanently once mined.
+  10 minutes absorbs real-world clock drift while still capping how far
+  `issuedAt` can be future-dated. The upper bound is exact, unaffected.
 - Statement becomes: *"I own this wallet and consent to including it in an Open
   Builder Score aggregate issued to the recipient below."*
 - Everything else from the 2026-08-04 payload rationale holds: no nonce (the
@@ -119,7 +126,11 @@ structural problems are `malformed`, proof outcomes are a separately displayed
 fact, and ownership still never enters `classifyAttestation` or `scoreVerdict`.
 The verify page's "self-attested" badge becomes, for aggregates, "attested from
 within the wallet set" vs "attested by an outside wallet"; single-wallet keeps
-the current wording.
+the current wording. This within/outside-set display applies to v3 aggregates
+only (decoded via a non-null `proofsIssuedAt`) — legacy aggregates (#2305,
+#2306, and the score_url/verify_url_prefix variants) predate the recipient
+proof slot, so the recipient's only possible proof is being the attester
+itself; they keep the plain self-attested pair instead, same as single-wallet.
 
 Registration reuses `scripts/register-aggregate-schema.mjs` (schema string read
 from `src/lib/eas.ts`, UID pinned and confirmed from the `Registered` event) and

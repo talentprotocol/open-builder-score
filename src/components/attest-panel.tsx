@@ -15,12 +15,14 @@ import {
   attestScore,
   ATTEST_CHAIN_ID,
   EASSCAN_SITE,
+  AGGREGATE_PREFLIGHT_ERRORS,
 } from '@/lib/eas'
 import {
   canonicalExtraWallets,
   ownershipTypedData,
   verifyOwnershipProofs,
   OWNERSHIP_PROOF_TTL_SECONDS,
+  ISSUED_AT_SKEW_ALLOWANCE_SECONDS,
 } from '@/lib/ownership'
 import {
   getOrCreateProofSession,
@@ -29,6 +31,7 @@ import {
   type ProofSession,
 } from '@/lib/proof-store'
 import { describeWalletError, type WalletErrorInfo } from '@/lib/wallet-errors'
+import { clientFor } from '@/lib/chains'
 import { scorePath, verifyPath } from '@/lib/routes'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { PingDot } from '@/components/motion/ping-dot'
@@ -219,10 +222,18 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   // nothing: it will prove itself by sending the transaction.
   const prevConnected = useRef<string | undefined>(undefined)
   useEffect(() => {
+    // Bail without recording while off-chain: a wallet connected on the
+    // wrong network hasn't had its chance to be prompted yet. Recording it
+    // here would make `changed` false once the network switch lands (this
+    // effect re-runs on the onAttestChain flip), so the prompt would never
+    // fire for it — the bug this guard fixes. Every other bail path below
+    // still records, so a dismissed/already-handled wallet doesn't re-prompt
+    // in a loop.
+    if (!onAttestChain) return
     const changed = connectedLower !== prevConnected.current
     prevConnected.current = connectedLower
     if (!changed || !isAggregate || !connectedLower || session === null) return
-    if (!onAttestChain || signing || busy) return
+    if (signing || busy) return
     const mine = rows.find((w) => w.toLowerCase() === connectedLower)
     if (!mine || proofFor(mine)) return
     const othersPending = rows.some(
@@ -239,21 +250,43 @@ export function AttestPanel({ scored }: { scored: Scored }) {
 
   async function handleAttest() {
     if (!walletClient || busy || !canAttest) return
-    // Authoritative expiry check. Rendered as static text rather than driven by
-    // a timer — a stale render costs one clear error, a timer costs a whole
-    // class of time-coupled state bugs.
-    if (isAggregate) {
-      if (session === null) return
-      if (Math.floor(Date.now() / 1000) > session.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
-        clearProofSession(localStorage, recipient, extras)
-        setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
-        setError({ message: 'These signatures expired — sign again to attest.', detail: null, cancelled: false })
-        return
-      }
-    }
     setBusy(true)
     setError(null)
     try {
+      // Authoritative expiry check. Rendered as static text rather than driven by
+      // a timer — a stale render costs one clear error, a timer costs a whole
+      // class of time-coupled state bugs.
+      if (isAggregate) {
+        if (session === null) return
+        if (Math.floor(Date.now() / 1000) > session.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
+          clearProofSession(localStorage, recipient, extras)
+          setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
+          setError({ message: 'These signatures expired — sign again to attest.', detail: null, cancelled: false })
+          return
+        }
+        // Attest-time clock-skew guard: issuedAt is minted from the client
+        // clock (the session effect below), but verify later checks it
+        // against the chain clock (att.timeCreated). A client clock running
+        // ahead would mint proofs that can never pass that check — catch it
+        // here, before gas is spent, rather than after. Couldn't-check is not
+        // the same as failed: an RPC hiccup on this read must not block attest.
+        try {
+          const block = await clientFor(ATTEST_CHAIN_ID).getBlock()
+          if (session.issuedAt > Number(block.timestamp) + ISSUED_AT_SKEW_ALLOWANCE_SECONDS) {
+            clearProofSession(localStorage, recipient, extras)
+            setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
+            setError({
+              message:
+                'Your device clock looks ahead of the network — signatures would not verify. Fix the clock, then sign again.',
+              detail: null,
+              cancelled: false,
+            })
+            return
+          }
+        } catch {
+          // RPC read failed — proceed. Couldn't check is not the same as failed.
+        }
+      }
       const common = {
         walletClient,
         recipient,
@@ -280,7 +313,17 @@ export function AttestPanel({ scored }: { scored: Scored }) {
         : await attestScore(common)
       setAttestationUid(uid)
     } catch (e) {
-      setError(describeWalletError(e, 'attest'))
+      const message = e instanceof Error ? e.message : null
+      // Pre-transaction throws (slot guard, 'wallet not connected', the encode
+      // invariants) happen before any signer or transaction exists, so "The
+      // attestation failed onchain" would be false. They're already
+      // human-readable one-liners — show them as the headline verbatim
+      // instead of routing through the generic post-tx wallet-error mapping.
+      if (message !== null && AGGREGATE_PREFLIGHT_ERRORS.includes(message)) {
+        setError({ message, detail: null, cancelled: false })
+      } else {
+        setError(describeWalletError(e, 'attest'))
+      }
     } finally {
       setBusy(false)
     }
@@ -424,8 +467,6 @@ export function AttestPanel({ scored }: { scored: Scored }) {
           )}
         </div>
       )}
-
-      {connected && !onAttestChain && null /* switch button already in the button row */}
 
       {isAggregate
         ? connected &&

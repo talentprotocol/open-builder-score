@@ -5,7 +5,7 @@ import { absoluteUrl, verifyWalletPath } from './routes'
 import type { WalletClient } from 'viem'
 
 // OP-stack predeploys — same address on Base and Base Sepolia.
-// Verified against EAS docs at registration time (Task 11).
+// Verified against EAS docs at registration time.
 export const EAS_CONTRACT_ADDRESS = '0x4200000000000000000000000000000000000021' as const
 export const SCHEMA_REGISTRY_ADDRESS = '0x4200000000000000000000000000000000000020' as const
 
@@ -134,6 +134,18 @@ function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner {
   return new JsonRpcSigner(provider, account.address)
 }
 
+// Every message a preflight check below can throw before a signer or
+// transaction exists — none of them mean "the attestation failed onchain",
+// so the caller (attest-panel's handleAttest) shows these verbatim instead
+// of routing them through the generic post-tx wallet-error mapping.
+export const AGGREGATE_PREFLIGHT_ERRORS: readonly string[] = [
+  'wallet not connected',
+  'an aggregate attestation needs at least one extra wallet',
+  'every extra wallet needs exactly one ownership proof',
+  'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
+  'exactly one wallet — the one sending the transaction — may rely on msg.sender as its proof',
+]
+
 export interface AggregateAttestParams extends AttestParams {
   /** Canonical order — canonicalExtraWallets(). Index i pairs with ownershipProofs[i]. */
   extraWallets: `0x${string}`[]
@@ -189,6 +201,18 @@ export async function attestAggregateScore(
     [params.recipient, params.recipientProof],
     ...params.extraWallets.map((w, i): [`0x${string}`, `0x${string}`] => [w, params.ownershipProofs[i]]),
   ]
+  // A slot must be exactly '0x' (the attester exemption) or a real proof
+  // byte string — never undefined/missing, which would otherwise sail into
+  // SchemaEncoder and fail there with an opaque SDK error instead of this one.
+  const malformed = slots.filter(
+    ([, proof]) =>
+      proof !== '0x' && !(typeof proof === 'string' && proof.startsWith('0x') && proof.length > 2),
+  )
+  if (malformed.length > 0) {
+    throw new Error(
+      'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
+    )
+  }
   const empty = slots.filter(([, proof]) => proof === '0x')
   if (empty.length !== 1 || empty[0][0].toLowerCase() !== account.address.toLowerCase()) {
     throw new Error(
