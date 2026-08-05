@@ -185,17 +185,23 @@ function defaultVerifyContract(chainId: number): VerifyContractFn {
     })
 }
 
+// `recover` is bound by the caller against typedData's concrete (non-union)
+// type. viem's generic can't correlate `types`/`primaryType`/`message` across
+// the OwnershipTypedData | LegacyOwnershipTypedData union at this boundary —
+// binding per-branch, where the shape is concrete, sidesteps that rather than
+// casting it away.
 async function checkSignature(
   wallet: `0x${string}`,
   typedData: OwnershipTypedData | LegacyOwnershipTypedData,
   signature: `0x${string}`,
   verifyContract: VerifyContractFn,
+  recover: (signature: `0x${string}`) => Promise<`0x${string}`>,
   blockNumber?: bigint,
 ): Promise<ProofCheck> {
   // Offline first. For an EOA this is pure arithmetic over bytes already
   // onchain: no server, no RPC, verifiable by anyone forever.
   try {
-    const recovered = await recoverTypedDataAddress({ ...typedData, signature })
+    const recovered = await recover(signature)
     if (recovered.toLowerCase() === wallet.toLowerCase()) return { wallet, status: 'eoa' }
   } catch {
     // Not a plain 65-byte ECDSA signature — a smart-account wrapper, most
@@ -267,7 +273,8 @@ export async function verifyOwnershipProofs(
         issuedAt: args.issuedAt,
         chainId,
       })
-      return checkSignature(wallet, typedData, signature, verifyContract, args.blockNumber)
+      const recover = (sig: `0x${string}`) => recoverTypedDataAddress({ ...typedData, signature: sig })
+      return checkSignature(wallet, typedData, signature, verifyContract, recover, args.blockNumber)
     }),
   )
 }
@@ -305,7 +312,8 @@ export async function verifyLegacyOwnershipProofs(
         computedAt: args.computedAt,
         chainId,
       })
-      return checkSignature(wallet, typedData, signature, verifyContract, args.blockNumber)
+      const recover = (sig: `0x${string}`) => recoverTypedDataAddress({ ...typedData, signature: sig })
+      return checkSignature(wallet, typedData, signature, verifyContract, recover, args.blockNumber)
     }),
   )
 }
