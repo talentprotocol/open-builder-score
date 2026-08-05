@@ -13,6 +13,28 @@ export const SCHEMA_REGISTRY_ADDRESS = '0x42000000000000000000000000000000000000
 export const ATTEST_SCHEMA =
   'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number'
 
+// Aggregate (multi-wallet) scores. `wallet` stays the primary — it keeps the
+// recipient == wallet invariant, keeps isSelfAttested unchanged, and leaves
+// ownership_proofs[i] a clean 1:1 with extra_wallets[i].
+//
+// ownership_proofs is bytes[] rather than a fixed width because a smart account
+// returns an ABI-encoded wrapper — and, while still counterfactual, an ERC-6492
+// wrapper of several hundred bytes. Signatures are stored verbatim, never
+// unwrapped: the wrapper is what makes a counterfactual signature verifiable.
+// verify_url points at the verification view for this wallet, not at a fresh
+// scoring run — someone reading the record wants what was verified, not a new
+// computation. It is keyed on the primary wallet rather than on this
+// attestation's UID because an attestation cannot contain a link to itself:
+// EAS hashes both the record's own data AND block.timestamp into the UID, so
+// the UID is neither self-containable nor knowable before the tx is mined.
+// (Both confirmed by recomputing a live attestation's UID from its fields.)
+//
+// badges carries the slugs earned at scan time. They are zero-point, so they
+// cannot move the score — but two of them are dated exports from Talent
+// Protocol with no permissionless source, so a verifier can confirm some and
+// only echo the rest. verify.ts classifies each, and the verify screen says
+// which is which rather than implying all were proven.
+//
 // v3 (2026-08-05): any wallet of the set may send the attestation. The sender
 // needs no stored proof — EAS records it as the attester, which is its proof —
 // so exactly one proof slot is '0x': recipient_ownership_proof when the
@@ -74,6 +96,9 @@ export const ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID = computeSchemaUid(
 export const ATTEST_AGGREGATE_VERIFY_URL_SCHEMA =
   'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
 
+// Registered on Base Sepolia (2026-08-04), resolver 0x0, revocable.
+// Golden-pinned in test/eas.test.ts — a change here breaks decoding of every
+// aggregate attestation made before the recipient proof slot existed.
 export const ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID = computeSchemaUid(
   ATTEST_AGGREGATE_VERIFY_URL_SCHEMA,
   zeroAddress,

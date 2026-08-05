@@ -20,7 +20,7 @@ import {
   type OnchainAttestation,
   type VerifyVerdict,
 } from '@/lib/verify'
-import { EASSCAN_SITE, ATTEST_AGGREGATE_SCHEMA_UID, ATTEST_SCHEMA_UID } from '@/lib/eas'
+import { EASSCAN_SITE } from '@/lib/eas'
 import { verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
 import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
@@ -205,9 +205,7 @@ function AttestationDetails({
         <dt className="shrink-0 text-muted-foreground">Schema</dt>
         <dd className="text-right text-sm">
           <a
-            href={`${EASSCAN_SITE}/schema/view/${
-              decoded.version === 2 ? ATTEST_AGGREGATE_SCHEMA_UID : ATTEST_SCHEMA_UID
-            }`}
+            href={`${EASSCAN_SITE}/schema/view/${attestation.schemaId}`}
             target="_blank"
             rel="noreferrer"
             className="text-success-text underline"
