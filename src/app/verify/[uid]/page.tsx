@@ -150,7 +150,16 @@ function AttestationDetails({
         <dt className="shrink-0 text-muted-foreground">Attester</dt>
         <dd className="break-all text-right font-mono text-sm">
           {attestation.attester}
-          {decoded.extraWallets.length > 0 ? (
+          {/* v3 aggregates only (proofsIssuedAt !== null): every wallet, the
+              recipient included, has its own proof slot, so "in the wallet
+              set" correctly implies the recipient was proven too. Legacy
+              aggregates (proofsIssuedAt === null) never had a recipient proof
+              slot — verifyLegacyOwnershipProofs checks extras only — so an
+              attacker attesting from a self-owned extra would otherwise show
+              "in the wallet set" green while the recipient (e.g. a whale) was
+              never proven to consent. Legacy falls back to the self-attested
+              pair, which correctly flags an attester that isn't the recipient. */}
+          {decoded.proofsIssuedAt !== null ? (
             isAttesterInSet(attestation, decoded) ? (
               <span className="block font-sans text-xs text-success-text">
                 ✓ In the wallet set — proved by sending this attestation
@@ -258,14 +267,25 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
   useEffect(() => {
     if (!isAttestationUid(uid)) {
-      setState({
-        phase: 'invalid',
-        problems: ['not a valid attestation UID (0x…, 64 hex chars)'],
+      // Deferred one microtask out, matching the pattern used throughout the
+      // codebase for effect-triggered setState: reading `uid` is the kind of
+      // external sync effects exist for, but the state update itself must
+      // not happen synchronously in the effect body.
+      queueMicrotask(() => {
+        setState({
+          phase: 'invalid',
+          problems: ['not a valid attestation UID (0x…, 64 hex chars)'],
+        })
       })
       return
     }
     let cancelled = false
-    setState({ phase: 'loading', step: 'Fetching attestation…', settled: [] })
+    // Same deferral as above: resets to loading (relevant when `uid` changes
+    // after a previous 'done'/'invalid' render) without setting state
+    // synchronously in the effect body.
+    queueMicrotask(() => {
+      if (!cancelled) setState({ phase: 'loading', step: 'Fetching attestation…', settled: [] })
+    })
     ;(async () => {
       const fetched = await fetchAttestation(uid)
       if (cancelled) return
