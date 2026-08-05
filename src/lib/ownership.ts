@@ -16,6 +16,14 @@ import { clientFor } from './chains'
 
 export const MAX_EXTRA_WALLETS = 4
 
+// issuedAt is minted from the client's clock (attest-panel's session effect)
+// but checked here against the chain clock (att.timeCreated). A client clock
+// running fast would otherwise brand an honest proof "expired" the instant it
+// landed onchain — silently at attest time, permanently once mined. 10
+// minutes absorbs real-world clock drift while still capping how far
+// issuedAt can be future-dated to stretch the validity window.
+export const ISSUED_AT_SKEW_ALLOWANCE_SECONDS = 600
+
 // The window's job is to kill year-old proofs, not to be a nonce — replay into
 // someone else's aggregate is already impossible, since the recipient and the
 // whole wallet set are bound into the message. A day is long enough that a
@@ -263,8 +271,14 @@ export async function verifyOwnershipProofs(
       if (!signature || signature === '0x') return { wallet, status: 'missing' }
 
       // Both bounds, checked before any network call: signatures expire 24h
-      // after their anchor, and cannot postdate the attestation they live in.
-      if (args.at > args.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS || args.at < args.issuedAt) {
+      // after their anchor, and cannot postdate the attestation they live in
+      // by more than a plausible client clock skew (see
+      // ISSUED_AT_SKEW_ALLOWANCE_SECONDS above) — the upper bound is exact,
+      // the lower bound has slack because issuedAt is client-minted.
+      if (
+        args.at > args.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS ||
+        args.at < args.issuedAt - ISSUED_AT_SKEW_ALLOWANCE_SECONDS
+      ) {
         return { wallet, status: 'expired' }
       }
 

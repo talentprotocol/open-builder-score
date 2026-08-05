@@ -9,6 +9,7 @@ import {
   verifyLegacyOwnershipProofs,
   aggregateProofSummary,
   OWNERSHIP_PROOF_TTL_SECONDS,
+  ISSUED_AT_SKEW_ALLOWANCE_SECONDS,
 } from '@/lib/ownership'
 
 const PRIMARY = '0x33041027dd8F4dC82B6e825FB37ADf8f15d44053' as const
@@ -188,12 +189,52 @@ describe('verifyOwnershipProofs (v2, attester-exempt)', () => {
       { verifyContractSignature: failIfCalled },
     )
     expect(statuses(late)).toEqual(['attester', 'expired', 'expired'])
-    // issuedAt after the attestation landed: proofs cannot postdate the record.
+    // issuedAt well before the attestation landed — beyond any plausible
+    // client clock skew — proofs cannot postdate the record by an unbounded
+    // margin. (The boundary at the skew allowance itself is covered below.)
     const early = await verifyOwnershipProofs(
-      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT, at: ISSUED_AT - 1 },
+      {
+        ...base,
+        proofs,
+        recipientProof: '0x',
+        attester: RECIPIENT,
+        at: ISSUED_AT - ISSUED_AT_SKEW_ALLOWANCE_SECONDS - 3600,
+      },
       { verifyContractSignature: failIfCalled },
     )
     expect(statuses(early)).toEqual(['attester', 'expired', 'expired'])
+  })
+
+  it('tolerates a client clock behind the chain clock by up to the skew allowance', async () => {
+    // at == issuedAt - 599: one second inside the 600s allowance — valid.
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const checks = await verifyOwnershipProofs(
+      {
+        ...base,
+        proofs,
+        recipientProof: '0x',
+        attester: RECIPIENT,
+        at: ISSUED_AT - (ISSUED_AT_SKEW_ALLOWANCE_SECONDS - 1),
+      },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'eoa', 'eoa'])
+  })
+
+  it('expires once the clock skew exceeds the allowance', async () => {
+    // at == issuedAt - 601: one second past the 600s allowance — expired.
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const checks = await verifyOwnershipProofs(
+      {
+        ...base,
+        proofs,
+        recipientProof: '0x',
+        attester: RECIPIENT,
+        at: ISSUED_AT - (ISSUED_AT_SKEW_ALLOWANCE_SECONDS + 1),
+      },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'expired', 'expired'])
   })
 
   it('verifies one signature inside the full set (sign-time preflight)', async () => {
