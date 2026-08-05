@@ -14,6 +14,7 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isAttesterInSet,
   isSelfAttested,
   scoreVerdict,
   type DecodedScoreAttestation,
@@ -21,7 +22,7 @@ import {
   type VerifyVerdict,
 } from '@/lib/verify'
 import { EASSCAN_SITE } from '@/lib/eas'
-import { verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
+import { verifyLegacyOwnershipProofs, verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
 import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
@@ -82,9 +83,12 @@ const OWNERSHIP_COPY: Record<ProofCheck['status'], { tone: string; text: string 
     text: '✓ accepted by the account contract (ERC-1271 — depends on its current owners)',
   },
   invalid: { tone: 'text-warning-text', text: '⚠ signature does not prove this wallet' },
-  expired: { tone: 'text-warning-text', text: '⚠ signed outside the scan’s validity window' },
+  expired: { tone: 'text-warning-text', text: '⚠ signed outside the proofs’ validity window' },
   missing: { tone: 'text-warning-text', text: '⚠ no ownership signature' },
   unchecked: { tone: 'text-muted-foreground', text: '· couldn’t check right now' },
+  // msg.sender: EAS itself recorded this wallet as the attester. Free, onchain,
+  // and as permanent as the attestation.
+  attester: { tone: 'text-success-text', text: '✓ proved by sending this attestation' },
 }
 
 function AttestationDetails({
@@ -146,7 +150,17 @@ function AttestationDetails({
         <dt className="shrink-0 text-muted-foreground">Attester</dt>
         <dd className="break-all text-right font-mono text-sm">
           {attestation.attester}
-          {isSelfAttested(attestation, decoded) ? (
+          {decoded.extraWallets.length > 0 ? (
+            isAttesterInSet(attestation, decoded) ? (
+              <span className="block font-sans text-xs text-success-text">
+                ✓ In the wallet set — proved by sending this attestation
+              </span>
+            ) : (
+              <span className="block font-sans text-xs text-warning-text">
+                ⚠ Outside the wallet set — every wallet must carry its own signature
+              </span>
+            )
+          ) : isSelfAttested(attestation, decoded) ? (
             <span className="block font-sans text-xs text-success-text">
               ✓ Self-attested — the scored wallet signed this itself
             </span>
@@ -313,13 +327,23 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         // independent facts, and are displayed as two.
         const ownership =
           classification.decoded.extraWallets.length > 0
-            ? await verifyOwnershipProofs({
-                primary: classification.decoded.wallet,
-                extras: classification.decoded.extraWallets,
-                proofs: classification.decoded.ownershipProofs,
-                computedAt: classification.decoded.computedAt,
-                at: fetched.attestation.timeCreated,
-              })
+            ? classification.decoded.proofsIssuedAt !== null
+              ? await verifyOwnershipProofs({
+                  recipient: classification.decoded.wallet,
+                  extras: classification.decoded.extraWallets,
+                  proofs: classification.decoded.ownershipProofs,
+                  recipientProof: classification.decoded.recipientProof ?? '0x',
+                  attester: fetched.attestation.attester as `0x${string}`,
+                  issuedAt: classification.decoded.proofsIssuedAt,
+                  at: fetched.attestation.timeCreated,
+                })
+              : await verifyLegacyOwnershipProofs({
+                  primary: classification.decoded.wallet,
+                  extras: classification.decoded.extraWallets,
+                  proofs: classification.decoded.ownershipProofs,
+                  computedAt: classification.decoded.computedAt,
+                  at: fetched.attestation.timeCreated,
+                })
             : []
         if (cancelled) return
         setState({
