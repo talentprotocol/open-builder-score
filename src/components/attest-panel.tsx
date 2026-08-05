@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit'
 import {
@@ -22,6 +22,13 @@ import {
   verifyOwnershipProofs,
   OWNERSHIP_PROOF_TTL_SECONDS,
 } from '@/lib/ownership'
+import {
+  getOrCreateProofSession,
+  saveProof,
+  clearProofSession,
+  type ProofSession,
+} from '@/lib/proof-store'
+import { describeWalletError, type WalletErrorInfo } from '@/lib/wallet-errors'
 import { scorePath, verifyPath } from '@/lib/routes'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { PingDot } from '@/components/motion/ping-dot'
@@ -47,21 +54,40 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   const auth = useGithubAuth()
   const [busy, setBusy] = useState(false)
   const [signing, setSigning] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<WalletErrorInfo | null>(null)
   const [attestationUid, setAttestationUid] = useState<string | null>(null)
-
-  // Keyed by lowercased address. Component state rather than sessionStorage on
-  // purpose: a reload re-runs the scan and mints a new computedAt, which is
-  // bound into every signature, so persisted proofs could only ever be stale.
-  // Switching accounts does not remount this component, which is the case that
-  // actually matters.
-  const [proofs, setProofs] = useState<Record<string, `0x${string}`>>({})
 
   // Canonical order here and nowhere else: the results page and inputPath keep
   // the user's typed order so shared URLs stay stable. Row index == onchain
   // proof index because the onchain array is exactly this one.
-  const extras = canonicalExtraWallets(scored.address, scored.extraAddresses)
+  const recipient = scored.address
+  const extras = canonicalExtraWallets(recipient, scored.extraAddresses)
+  const rows = [recipient, ...extras]
   const isAggregate = extras.length > 0
+
+  // Loaded in an effect: localStorage is browser-only and this component SSRs.
+  const [session, setSession] = useState<ProofSession | null>(null)
+  useEffect(() => {
+    if (!isAggregate) return
+    // Deferred one microtask out: reading localStorage/Date.now is exactly the
+    // kind of external-system sync effects exist for, but setting state from
+    // their result must not happen synchronously in the effect body itself.
+    queueMicrotask(() => {
+      setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
+    })
+    // Canonical set is derived state; key it by its serialisation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAggregate, recipient, extras.join(',')])
+
+  const proofFor = (w: string) => session?.proofs[w.toLowerCase()]
+  const connectedLower = connected?.toLowerCase()
+  const connectedInSet = rows.some((w) => w.toLowerCase() === connectedLower)
+  // Every wallet except the connected one must hold a signature; the connected
+  // one proves itself by sending the transaction.
+  const missingOthers = rows.filter(
+    (w) => w.toLowerCase() !== connectedLower && proofFor(w) === undefined,
+  )
+  const setProved = connectedInSet && missingOthers.length === 0
 
   const dataComplete = scored.score.complete && scored.gather.baseBlockNumber !== null
 
@@ -76,12 +102,13 @@ export function AttestPanel({ scored }: { scored: Scored }) {
   // the transaction signature is the proof, and unlike a browser-only
   // personal_sign anyone can verify it afterwards.
   const walletOwned =
-    connected !== undefined && connected.toLowerCase() === scored.address.toLowerCase()
+    connected !== undefined && connected.toLowerCase() === recipient.toLowerCase()
 
   const onAttestChain = chainId === ATTEST_CHAIN_ID
-  const allProved = extras.every((a) => proofs[a.toLowerCase()] !== undefined)
   const computedAt = scored.gather.inputs.computedAt
-  const canAttest = dataComplete && handleVerified && walletOwned && onAttestChain && allProved
+  const canAttest = isAggregate
+    ? dataComplete && handleVerified && onAttestChain && setProved && session !== null
+    : dataComplete && handleVerified && onAttestChain && walletOwned
 
   async function handleSwitch() {
     if (busy) return
@@ -90,7 +117,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
     try {
       await switchChainAsync({ chainId: ATTEST_CHAIN_ID })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network switch failed')
+      setError(describeWalletError(e, 'switch'))
     } finally {
       setBusy(false)
     }
@@ -108,66 +135,107 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       await disconnectAsync()
       openConnectModal?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not disconnect the current wallet')
+      setError(describeWalletError(e, 'connect'))
     }
   }
 
   async function handleSign(wallet: `0x${string}`) {
-    if (signing || busy) return
+    if (signing || busy || session === null) return
     setSigning(wallet.toLowerCase())
     setError(null)
     try {
-      const typedData = ownershipTypedData({
-        primary: scored.address,
-        wallet,
-        extras,
-        computedAt,
-      })
+      const typedData = ownershipTypedData({ recipient, wallet, extras, issuedAt: session.issuedAt })
       const signature = await signTypedDataAsync(typedData)
 
-      // Verify before storing. A wallet quirk — signing from a different account
-      // than displayed, or a smart account returning something the validator
-      // rejects — would otherwise surface at verify time, after gas was spent.
-      const [check] = await verifyOwnershipProofs({
-        primary: scored.address,
-        extras: [wallet],
-        proofs: [signature],
-        computedAt,
+      // Verify inside the full set before storing (a wallet signing from a
+      // different account than displayed would otherwise surface after gas was
+      // spent). The old preflight verified against a one-wallet set — with two
+      // or more extras every signature "failed". This one cannot: the check
+      // rebuilds exactly what was signed.
+      const idx = rows.findIndex((w) => w.toLowerCase() === wallet.toLowerCase())
+      const checks = await verifyOwnershipProofs({
+        recipient,
+        extras,
+        proofs: extras.map((w) => (w.toLowerCase() === wallet.toLowerCase() ? signature : '0x')),
+        recipientProof: wallet.toLowerCase() === recipient.toLowerCase() ? signature : '0x',
+        attester: null,
+        issuedAt: session.issuedAt,
         at: Math.floor(Date.now() / 1000),
       })
+      const check = checks[idx]
       if (check.status === 'invalid' || check.status === 'missing') {
-        setError(
-          `That signature doesn't verify as ${short(wallet)}. Check which account your wallet signed with.`,
-        )
+        setError({
+          message: `That signature doesn't verify as ${short(wallet)}. Check which account your wallet signed with.`,
+          detail: null,
+          cancelled: false,
+        })
         return
       }
       if (check.status === 'unchecked') {
-        setError(`Couldn't confirm the signature right now (${check.reason}). Try again.`)
+        setError({
+          message: `Couldn't confirm the signature right now (${check.reason}). Try again.`,
+          detail: null,
+          cancelled: false,
+        })
         return
       }
-      setProofs((prev) => ({ ...prev, [wallet.toLowerCase()]: signature }))
+      if (check.status === 'expired') {
+        setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
+        setError({ message: 'These signatures expired — a fresh window was started, sign again.', detail: null, cancelled: false })
+        return
+      }
+      const next = saveProof(localStorage, recipient, extras, wallet, signature, Math.floor(Date.now() / 1000))
+      if (next) setSession(next)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Signing failed')
+      setError(describeWalletError(e, 'sign'))
     } finally {
       setSigning(null)
     }
   }
+
+  // Auto-prompt: a freshly connected wallet that matches a pending row signs
+  // immediately — unless it is the only unproven one, in which case it needs
+  // nothing: it will prove itself by sending the transaction.
+  const prevConnected = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const changed = connectedLower !== prevConnected.current
+    prevConnected.current = connectedLower
+    if (!changed || !isAggregate || !connectedLower || session === null) return
+    if (!onAttestChain || signing || busy) return
+    const mine = rows.find((w) => w.toLowerCase() === connectedLower)
+    if (!mine || proofFor(mine)) return
+    const othersPending = rows.some(
+      (w) => w.toLowerCase() !== connectedLower && proofFor(w) === undefined,
+    )
+    if (!othersPending) return
+    // Deferred one microtask out for the same reason the session load is:
+    // handleSign's setState calls must not read as synchronous-in-effect.
+    queueMicrotask(() => {
+      void handleSign(mine)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectedLower, onAttestChain, session, isAggregate])
 
   async function handleAttest() {
     if (!walletClient || busy || !canAttest) return
     // Authoritative expiry check. Rendered as static text rather than driven by
     // a timer — a stale render costs one clear error, a timer costs a whole
     // class of time-coupled state bugs.
-    if (Math.floor(Date.now() / 1000) > computedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
-      setError('This scan is more than a day old — reload to rescan, then sign again.')
-      return
+    if (isAggregate) {
+      if (session === null) return
+      if (Math.floor(Date.now() / 1000) > session.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
+        clearProofSession(localStorage, recipient, extras)
+        setSession(getOrCreateProofSession(localStorage, recipient, extras, Math.floor(Date.now() / 1000)))
+        setError({ message: 'These signatures expired — sign again to attest.', detail: null, cancelled: false })
+        return
+      }
     }
     setBusy(true)
     setError(null)
     try {
       const common = {
         walletClient,
-        recipient: scored.address,
+        recipient,
         specVersion: spec.version,
         githubHandle: scored.githubHandle,
         score: scored.score.total,
@@ -178,7 +246,12 @@ export function AttestPanel({ scored }: { scored: Scored }) {
         ? await attestAggregateScore({
             ...common,
             extraWallets: extras,
-            ownershipProofs: extras.map((a) => proofs[a.toLowerCase()]),
+            ownershipProofs: extras.map((w) =>
+              w.toLowerCase() === connectedLower ? '0x' : session!.proofs[w.toLowerCase()],
+            ),
+            recipientProof:
+              recipient.toLowerCase() === connectedLower ? '0x' : session!.proofs[recipient.toLowerCase()],
+            proofsIssuedAt: session!.issuedAt,
             // Only what was actually earned. 'unavailable' is not 'earned', and
             // recording it as one would put an unverifiable claim onchain.
             badges: scored.badges.filter((b) => b.state === 'earned').map((b) => b.slug),
@@ -186,7 +259,7 @@ export function AttestPanel({ scored }: { scored: Scored }) {
         : await attestScore(common)
       setAttestationUid(uid)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Attestation failed')
+      setError(describeWalletError(e, 'attest'))
     } finally {
       setBusy(false)
     }
@@ -200,8 +273,6 @@ export function AttestPanel({ scored }: { scored: Scored }) {
       <p className="text-sm text-muted-foreground">
         You sign, you pay. The attestation embeds the spec version, score, and the as-of anchor
         so anyone can recompute and verify it.
-        {isAggregate &&
-          ' Each other wallet signs once to prove it is yours; those signatures go into the attestation, so anyone can check them later.'}
       </p>
 
       {!dataComplete && (
@@ -249,44 +320,66 @@ export function AttestPanel({ scored }: { scored: Scored }) {
 
       {isAggregate && dataComplete && handleVerified && (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background/40 p-3">
-          <h3 className="text-sm font-medium">Wallet ownership</h3>
-          {!onAttestChain && (
+          <h3 className="text-sm font-medium">Prove ownership</h3>
+          <p className="text-sm text-muted-foreground">
+            Each wallet proves ownership once: the one that sends the transaction proves itself;
+            the rest sign a free message.
+          </p>
+          {!onAttestChain && connected && (
             <p className="text-sm text-warning-text">
-              Switch to Base Sepolia first — a wallet won&apos;t sign a message for a network
-              it isn&apos;t on.
+              Switch to Base Sepolia first — a wallet won&apos;t sign a message for a network it
+              isn&apos;t on.
             </p>
           )}
           <ul className="flex flex-col gap-2">
-            {extras.map((wallet) => {
-              const signed = proofs[wallet.toLowerCase()] !== undefined
-              const isConnected = connected?.toLowerCase() === wallet.toLowerCase()
+            {rows.map((wallet) => {
+              const lower = wallet.toLowerCase()
+              const signed = proofFor(wallet) !== undefined
+              const isConnected = lower === connectedLower
+              const isRecipient = lower === recipient.toLowerCase()
+              const proved = signed || isConnected
               return (
                 <li key={wallet} className="flex flex-wrap items-center gap-2 text-sm">
-                  <PingDot settled={signed} />
+                  <PingDot settled={proved} />
                   <span className="break-all font-mono">{wallet}</span>
-                  {signed ? (
+                  {isRecipient && (
+                    <span className="text-xs text-muted-foreground">score address</span>
+                  )}
+                  {isConnected ? (
+                    !signed && missingOthers.length > 0 ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleSign(wallet)}
+                          disabled={signing !== null || busy || !onAttestChain}
+                        >
+                          {signing === lower ? 'Waiting for wallet…' : 'Sign with this wallet'}
+                        </Button>
+                        <span className="text-muted-foreground">
+                          will send the transaction — or sign so any other wallet can
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-success-text">
+                        ✓ proves itself by sending the transaction
+                      </span>
+                    )
+                  ) : signed ? (
                     <span className="text-success-text">✓ signed</span>
-                  ) : isConnected ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleSign(wallet)}
-                      disabled={signing !== null || busy || !onAttestChain}
-                    >
-                      {signing === wallet.toLowerCase() ? 'Waiting for wallet…' : 'Sign with this wallet'}
-                    </Button>
                   ) : (
                     <>
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={handleConnectAs}
-                        disabled={signing !== null || busy}
+                        disabled={signing !== null || busy || !openConnectModal}
                       >
-                        Connect this wallet
+                        Connect &amp; sign
                       </Button>
                       <span className="text-muted-foreground">
-                        disconnects the current one, then pick this address.
+                        disconnects the current wallet, then pick this address — the signature
+                        request follows on its own.
                       </span>
                     </>
                   )}
@@ -294,45 +387,68 @@ export function AttestPanel({ scored }: { scored: Scored }) {
               )
             })}
           </ul>
+          {session !== null && (
+            <p className="text-xs text-muted-foreground">
+              Signatures are valid until{' '}
+              {new Date((session.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS) * 1000).toLocaleString()}{' '}
+              and survive page reloads.{' '}
+              <Link
+                href={scorePath(recipient, scored.githubHandle)}
+                className="underline hover:text-foreground"
+              >
+                Score this address alone
+              </Link>{' '}
+              to attest without extra signatures.
+            </p>
+          )}
         </div>
       )}
 
-      {connected && !walletOwned && (
-        <div className="flex flex-col items-start gap-2">
-          <p className="text-sm text-warning-text">
-            You&apos;re connected as <span className="font-mono break-all">{connected}</span>, but
-            this score is for <span className="font-mono break-all">{scored.address}</span>.{' '}
-            {isAggregate
-              ? 'Connect the primary wallet to attest — it is the one that signs the transaction.'
-              : 'Connect the scored wallet to attest it — an attestation only means something if the wallet signs for itself.'}
-          </p>
-          {/* The extra-wallet rows get a button; the primary needs the same one,
-              or the last step of the flow is the only one with no way to act. */}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handleConnectAs}
-            disabled={signing !== null || busy}
-          >
-            Connect the primary wallet
-          </Button>
+      {connected && !onAttestChain && null /* switch button already in the button row */}
+
+      {isAggregate
+        ? connected &&
+          !connectedInSet && (
+            <p className="text-sm text-warning-text">
+              You&apos;re connected as <span className="font-mono break-all">{connected}</span>,
+              which isn&apos;t one of the scored wallets. Connect any wallet from the list above —
+              whichever is connected when you attest is the one that sends the transaction.
+            </p>
+          )
+        : connected &&
+          !walletOwned && (
+            <div className="flex flex-col items-start gap-2">
+              <p className="text-sm text-warning-text">
+                You&apos;re connected as <span className="font-mono break-all">{connected}</span>,
+                but this score is for{' '}
+                <span className="font-mono break-all">{scored.address}</span>. Connect the scored
+                wallet to attest it — an attestation only means something if the wallet signs for
+                itself.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleConnectAs}
+                disabled={signing !== null || busy || !openConnectModal}
+              >
+                Connect the scored wallet
+              </Button>
+            </div>
+          )}
+
+      {error && (
+        <div className={`text-sm ${error.cancelled ? 'text-muted-foreground' : 'text-destructive-text'}`}>
+          <p>{error.message}</p>
+          {error.detail && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs text-muted-foreground">
+                Technical detail
+              </summary>
+              <p className="break-all font-mono text-xs text-muted-foreground">{error.detail}</p>
+            </details>
+          )}
         </div>
       )}
-
-      {isAggregate && (
-        <p className="text-xs text-muted-foreground">
-          Signatures are tied to this scan and expire a day after it ran.{' '}
-          <Link
-            href={scorePath(scored.address, scored.githubHandle)}
-            className="underline hover:text-foreground"
-          >
-            Score the primary wallet alone
-          </Link>{' '}
-          to attest without them.
-        </p>
-      )}
-
-      {error && <p className="text-sm text-destructive-text break-all">{error}</p>}
       {attestationUid && (
         <FadeRise>
           <div className="flex flex-col gap-1">
