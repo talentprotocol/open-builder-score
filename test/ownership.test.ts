@@ -6,6 +6,7 @@ import {
   ownershipTypedData,
   legacyOwnershipTypedData,
   verifyOwnershipProofs,
+  verifyLegacyOwnershipProofs,
   aggregateProofSummary,
   OWNERSHIP_PROOF_TTL_SECONDS,
 } from '@/lib/ownership'
@@ -75,75 +76,137 @@ const signerA = privateKeyToAccount(`0x${'11'.repeat(32)}`)
 const signerB = privateKeyToAccount(`0x${'22'.repeat(32)}`)
 const EXTRAS = canonicalExtraWallets(PRIMARY, [signerA.address, signerB.address])
 
-// Task 2 rewrites these — verifyOwnershipProofs and its helpers below still
-// assume the v1 payload shape (primary/computedAt). Left commented rather
-// than adapted so the compile errors don't leak into a "temporarily working"
-// v1/v2 hybrid; Task 2 replaces this block wholesale.
-// // Never called in these tests: every signer is an EOA, so recovery is offline.
-// const failIfCalled = async () => {
-//   throw new Error('contract verification must not be reached for EOA signatures')
-// }
-//
-// function sign(
-//   signer: typeof signerA,
-//   over: { primary?: `0x${string}`; extras?: `0x${string}`[] } = {},
-// ) {
-//   return signer.signTypedData(
-//     ownershipTypedData({
-//       primary: over.primary ?? PRIMARY,
-//       wallet: signer.address,
-//       extras: over.extras ?? EXTRAS,
-//       computedAt: ISSUED_AT,
-//     }),
-//   )
-// }
-//
-// const statuses = (checks: Awaited<ReturnType<typeof verifyOwnershipProofs>>) =>
-//   checks.map((c) => c.status)
-//
-// const signerFor = (address: `0x${string}`) => (address === signerA.address ? signerA : signerB)
-//
-// /** Proofs aligned to EXTRAS order, which is sorted and so not the declaration order. */
-// const signAllInOrder = (over: { primary?: `0x${string}` } = {}) =>
-//   Promise.all(EXTRAS.map((a) => sign(signerFor(a), over)))
-//
-// describe('verifyOwnershipProofs', () => {
-//   it('accepts an EOA signature offline, with no network call', async () => {
-//     const proofs = await Promise.all(EXTRAS.map((a) => sign(a === signerA.address ? signerA : signerB)))
-//     const checks = await verifyOwnershipProofs(
-//       { primary: PRIMARY, extras: EXTRAS, proofs, computedAt: ISSUED_AT, at: ISSUED_AT + 60 },
-//       { verifyContractSignature: failIfCalled },
-//     )
-//     expect(statuses(checks)).toEqual(['eoa', 'eoa'])
-//   })
-//
-//   it('rejects a proof signed for a different primary — the whale-borrowing defence', async () => {
-//     const OTHER = '0x000000000000000000000000000000000000dEaD' as const
-//     const proofs = await Promise.all(
-//       EXTRAS.map((a) => sign(a === signerA.address ? signerA : signerB, { primary: OTHER })),
-//     )
-//     const checks = await verifyOwnershipProofs(
-//       { primary: PRIMARY, extras: EXTRAS, proofs, computedAt: ISSUED_AT, at: ISSUED_AT + 60 },
-//       { verifyContractSignature: async () => false },
-//     )
-//     expect(statuses(checks)).toEqual(['invalid', 'invalid'])
-//   })
-//
-//   it('rejects two valid proofs swapped between indices', async () => {
-//     const proofs = await signAllInOrder()
-//     const checks = await verifyOwnershipProofs(
-//       {
-//         primary: PRIMARY,
-//         extras: EXTRAS,
-//         proofs: [proofs[1], proofs[0]],
-//         computedAt: ISSUED_AT,
-//         at: ISSUED_AT + 60,
-//       },
-//       { verifyContractSignature: async () => false },
-//     )
-//     expect(statuses(checks)).toEqual(['invalid', 'invalid'])
-//   })
-// })
+// Never called in these tests: every signer is an EOA, so recovery is offline.
+const failIfCalled = async () => {
+  throw new Error('contract verification must not be reached for EOA signatures')
+}
+
+const statuses = (checks: Awaited<ReturnType<typeof verifyOwnershipProofs>>) =>
+  checks.map((c) => c.status)
+
+const signerFor = (address: `0x${string}`) => (address === signerA.address ? signerA : signerB)
+
+const RECIPIENT = PRIMARY
+
+function signV2(signer: typeof signerA, wallet: `0x${string}`, over: { recipient?: `0x${string}` } = {}) {
+  return signer.signTypedData(
+    ownershipTypedData({
+      recipient: over.recipient ?? RECIPIENT,
+      wallet,
+      extras: EXTRAS,
+      issuedAt: ISSUED_AT,
+    }),
+  )
+}
+
+describe('verifyOwnershipProofs (v2, attester-exempt)', () => {
+  const base = {
+    recipient: RECIPIENT,
+    extras: EXTRAS,
+    issuedAt: ISSUED_AT,
+    at: ISSUED_AT + 60,
+  }
+
+  it('accepts the recipient as attester with signed extras', async () => {
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'eoa', 'eoa'])
+    expect(aggregateProofSummary(checks)).toBe('all_proved')
+  })
+
+  it('accepts an extra as attester when the recipient signed', async () => {
+    // EXTRAS[0] sends the tx; the recipient and EXTRAS[1] sign.
+    // signerR does not control RECIPIENT, so verify via the contract path stub —
+    // what matters here is slot arithmetic, covered exactly by the statuses.
+    const recipientProof = `0x${'ab'.repeat(200)}` as const
+    const proofs = ['0x', await signV2(signerFor(EXTRAS[1]), EXTRAS[1])] as `0x${string}`[]
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof, attester: EXTRAS[0] },
+      { verifyContractSignature: async () => true },
+    )
+    expect(statuses(checks)).toEqual(['contract', 'attester', 'eoa'])
+  })
+
+  it('rejects when a non-attester slot is empty', async () => {
+    const proofs = ['0x', await signV2(signerFor(EXTRAS[1]), EXTRAS[1])] as `0x${string}`[]
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'missing', 'eoa'])
+    expect(aggregateProofSummary(checks)).toBe('failed')
+  })
+
+  it('demands every proof when the attester is outside the set', async () => {
+    const OUTSIDE = '0x000000000000000000000000000000000000dEaD' as const
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const missingRecipient = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: OUTSIDE },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(missingRecipient)).toEqual(['missing', 'eoa', 'eoa'])
+  })
+
+  it('short-circuits the attester slot before any proof check', async () => {
+    // Garbage in the attester slot is irrelevant: msg.sender is the proof.
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: `0x${'ff'.repeat(65)}`, attester: RECIPIENT },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(checks[0].status).toBe('attester')
+  })
+
+  it('rejects a proof signed for a different recipient — the whale-borrowing defence', async () => {
+    const OTHER = '0x000000000000000000000000000000000000dEaD' as const
+    const proofs = await Promise.all(
+      EXTRAS.map((a) => signV2(signerFor(a), a, { recipient: OTHER })),
+    )
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT },
+      { verifyContractSignature: async () => false },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'invalid', 'invalid'])
+  })
+
+  it('rejects two valid proofs swapped between indices', async () => {
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: [proofs[1], proofs[0]], recipientProof: '0x', attester: RECIPIENT },
+      { verifyContractSignature: async () => false },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'invalid', 'invalid'])
+  })
+
+  it('enforces the window in both directions', async () => {
+    const proofs = await Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+    const late = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT, at: ISSUED_AT + OWNERSHIP_PROOF_TTL_SECONDS + 1 },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(late)).toEqual(['attester', 'expired', 'expired'])
+    // issuedAt after the attestation landed: proofs cannot postdate the record.
+    const early = await verifyOwnershipProofs(
+      { ...base, proofs, recipientProof: '0x', attester: RECIPIENT, at: ISSUED_AT - 1 },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(early)).toEqual(['attester', 'expired', 'expired'])
+  })
+
+  it('verifies one signature inside the full set (sign-time preflight)', async () => {
+    // Regression for the old preflight bug: verification must always run against
+    // the full extras set the signature bound, with the target's slot filled.
+    const sig = await signV2(signerFor(EXTRAS[1]), EXTRAS[1])
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: ['0x', sig], recipientProof: '0x', attester: null },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['missing', 'missing', 'eoa'])
+  })
+})
 
 describe('legacyOwnershipTypedData golden vector', () => {
   // The v1 pin, unchanged: old attestations must keep verifying forever.
@@ -171,74 +234,116 @@ describe('ownershipTypedData golden vector', () => {
   })
 })
 
-// Task 2 rewrites these
-// describe('verifyOwnershipProofs — non-EOA and failure paths', () => {
-//   const base = { primary: PRIMARY, extras: EXTRAS, computedAt: ISSUED_AT }
-//
-//   it('reports expired without spending a network call', async () => {
-//     const proofs = await signAllInOrder()
-//     const checks = await verifyOwnershipProofs(
-//       { ...base, proofs, at: ISSUED_AT + OWNERSHIP_PROOF_TTL_SECONDS + 1 },
-//       { verifyContractSignature: failIfCalled },
-//     )
-//     expect(statuses(checks)).toEqual(['expired', 'expired'])
-//   })
-//
-//   it('reports missing for an absent or empty proof', async () => {
-//     const proofs = await signAllInOrder()
-//     const checks = await verifyOwnershipProofs(
-//       { ...base, proofs: ['0x', proofs[1]], at: ISSUED_AT + 60 },
-//       { verifyContractSignature: failIfCalled },
-//     )
-//     expect(statuses(checks)).toEqual(['missing', 'eoa'])
-//
-//     const short = await verifyOwnershipProofs(
-//       { ...base, proofs: [proofs[0]], at: ISSUED_AT + 60 },
-//       { verifyContractSignature: failIfCalled },
-//     )
-//     expect(statuses(short)).toEqual(['eoa', 'missing'])
-//   })
-//
-//   it('falls back to the account contract when offline recovery does not match', async () => {
-//     const wrapper = `0x${'ab'.repeat(200)}` as const
-//     const seen: unknown[] = []
-//     const checks = await verifyOwnershipProofs(
-//       { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60, blockNumber: 42n },
-//       {
-//         verifyContractSignature: async (a) => {
-//           seen.push(a)
-//           return true
-//         },
-//       },
-//     )
-//     expect(statuses(checks)).toEqual(['contract', 'contract'])
-//     expect(seen).toHaveLength(2)
-//     expect(seen[0]).toMatchObject({ address: EXTRAS[0], signature: wrapper, blockNumber: 42n })
-//   })
-//
-//   it('reports invalid when the account contract rejects the signature', async () => {
-//     const wrapper = `0x${'ab'.repeat(200)}` as const
-//     const checks = await verifyOwnershipProofs(
-//       { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60 },
-//       { verifyContractSignature: async () => false },
-//     )
-//     expect(statuses(checks)).toEqual(['invalid', 'invalid'])
-//   })
-//
-//   it('reports unchecked — not invalid — when the RPC fails, preserving the reason', async () => {
-//     const wrapper = `0x${'ab'.repeat(200)}` as const
-//     const checks = await verifyOwnershipProofs(
-//       { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60 },
-//       {
-//         verifyContractSignature: async () => {
-//           throw new Error('base-sepolia unreachable')
-//         },
-//       },
-//     )
-//     expect(statuses(checks)).toEqual(['unchecked', 'unchecked'])
-//     expect(checks[0].reason).toBe('base-sepolia unreachable')
-//   })
-// })
+describe('verifyOwnershipProofs — non-EOA and failure paths', () => {
+  const base = { recipient: RECIPIENT, extras: EXTRAS, issuedAt: ISSUED_AT, recipientProof: '0x' as const, attester: RECIPIENT }
+  const signAllInOrder = () => Promise.all(EXTRAS.map((a) => signV2(signerFor(a), a)))
+
+  it('reports expired without spending a network call', async () => {
+    const proofs = await signAllInOrder()
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs, at: ISSUED_AT + OWNERSHIP_PROOF_TTL_SECONDS + 1 },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'expired', 'expired'])
+  })
+
+  it('reports missing for an absent or empty proof', async () => {
+    const proofs = await signAllInOrder()
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: ['0x', proofs[1]], at: ISSUED_AT + 60 },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'missing', 'eoa'])
+
+    const short = await verifyOwnershipProofs(
+      { ...base, proofs: [proofs[0]], at: ISSUED_AT + 60 },
+      { verifyContractSignature: failIfCalled },
+    )
+    expect(statuses(short)).toEqual(['attester', 'eoa', 'missing'])
+  })
+
+  it('falls back to the account contract when offline recovery does not match', async () => {
+    const wrapper = `0x${'ab'.repeat(200)}` as const
+    const seen: unknown[] = []
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60, blockNumber: 42n },
+      {
+        verifyContractSignature: async (a) => {
+          seen.push(a)
+          return true
+        },
+      },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'contract', 'contract'])
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatchObject({ address: EXTRAS[0], signature: wrapper, blockNumber: 42n })
+  })
+
+  it('reports invalid when the account contract rejects the signature', async () => {
+    const wrapper = `0x${'ab'.repeat(200)}` as const
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60 },
+      { verifyContractSignature: async () => false },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'invalid', 'invalid'])
+  })
+
+  it('reports unchecked — not invalid — when the RPC fails, preserving the reason', async () => {
+    const wrapper = `0x${'ab'.repeat(200)}` as const
+    const checks = await verifyOwnershipProofs(
+      { ...base, proofs: [wrapper, wrapper], at: ISSUED_AT + 60 },
+      {
+        verifyContractSignature: async () => {
+          throw new Error('base-sepolia unreachable')
+        },
+      },
+    )
+    expect(statuses(checks)).toEqual(['attester', 'unchecked', 'unchecked'])
+    expect(checks[1].reason).toBe('base-sepolia unreachable')
+  })
+})
+
+describe('verifyLegacyOwnershipProofs', () => {
+  // Never called in these tests: every signer is an EOA, so recovery is offline.
+  const failIfCalledLegacy = async () => {
+    throw new Error('contract verification must not be reached for EOA signatures')
+  }
+
+  function signLegacy(
+    signer: typeof signerA,
+    over: { primary?: `0x${string}`; extras?: `0x${string}`[] } = {},
+  ) {
+    return signer.signTypedData(
+      legacyOwnershipTypedData({
+        primary: over.primary ?? PRIMARY,
+        wallet: signer.address,
+        extras: over.extras ?? EXTRAS,
+        computedAt: ISSUED_AT,
+      }),
+    )
+  }
+
+  it('accepts an EOA signature offline, with no network call', async () => {
+    const proofs = await Promise.all(EXTRAS.map((a) => signLegacy(signerFor(a))))
+    const checks = await verifyLegacyOwnershipProofs(
+      { primary: PRIMARY, extras: EXTRAS, proofs, computedAt: ISSUED_AT, at: ISSUED_AT + 60 },
+      { verifyContractSignature: failIfCalledLegacy },
+    )
+    expect(statuses(checks)).toEqual(['eoa', 'eoa'])
+  })
+
+  it('rejects a proof signed for a different primary — the whale-borrowing defence', async () => {
+    const OTHER = '0x000000000000000000000000000000000000dEaD' as const
+    const proofs = await Promise.all(
+      EXTRAS.map((a) => signLegacy(signerFor(a), { primary: OTHER })),
+    )
+    const checks = await verifyLegacyOwnershipProofs(
+      { primary: PRIMARY, extras: EXTRAS, proofs, computedAt: ISSUED_AT, at: ISSUED_AT + 60 },
+      { verifyContractSignature: async () => false },
+    )
+    expect(statuses(checks)).toEqual(['invalid', 'invalid'])
+  })
+})
 
 describe('aggregateProofSummary', () => {
   const w = EXTRAS[0]
@@ -269,5 +374,14 @@ describe('aggregateProofSummary', () => {
         { wallet: w, status: 'unchecked' },
       ]),
     ).toBe('some_unchecked')
+  })
+
+  it('counts an attester-exempt slot as proved', () => {
+    expect(
+      aggregateProofSummary([
+        { wallet: w, status: 'attester' },
+        { wallet: w, status: 'eoa' },
+      ]),
+    ).toBe('all_proved')
   })
 })

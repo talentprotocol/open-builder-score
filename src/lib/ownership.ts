@@ -142,7 +142,14 @@ export function canonicalExtraWallets(
 // 'unchecked' is deliberate: an RPC hiccup while asking a smart account whether
 // it accepts a signature must never render as "forged". Same rule the chain
 // reads already follow — couldn't check is not the same as not earned.
-export type ProofStatus = 'eoa' | 'contract' | 'invalid' | 'unchecked' | 'expired' | 'missing'
+export type ProofStatus =
+  | 'eoa'
+  | 'contract'
+  | 'invalid'
+  | 'unchecked'
+  | 'expired'
+  | 'missing'
+  | 'attester'
 
 export interface ProofCheck {
   wallet: `0x${string}`
@@ -151,23 +158,12 @@ export interface ProofCheck {
 }
 
 export type OwnershipTypedData = ReturnType<typeof ownershipTypedData>
+export type LegacyOwnershipTypedData = ReturnType<typeof legacyOwnershipTypedData>
 
 export interface VerifyContractSignatureArgs {
   address: `0x${string}`
-  typedData: OwnershipTypedData
+  typedData: OwnershipTypedData | LegacyOwnershipTypedData
   signature: `0x${string}`
-  blockNumber?: bigint
-}
-
-export interface VerifyOwnershipArgs {
-  primary: `0x${string}`
-  extras: `0x${string}`[]
-  proofs: `0x${string}`[]
-  computedAt: number
-  /** att.timeCreated when verifying, now when attesting. */
-  at: number
-  chainId?: number
-  /** Public Base RPCs prune state, so as-of-block ERC-1271 needs an archive node. */
   blockNumber?: bigint
 }
 
@@ -175,72 +171,141 @@ export interface OwnershipIO {
   verifyContractSignature?: (args: VerifyContractSignatureArgs) => Promise<boolean>
 }
 
+type VerifyContractFn = (args: VerifyContractSignatureArgs) => Promise<boolean>
+
+function defaultVerifyContract(chainId: number): VerifyContractFn {
+  return ({ address, typedData, signature, blockNumber }) =>
+    clientFor(chainId).verifyTypedData({
+      address,
+      ...typedData,
+      signature,
+      // Spread conditionally: viem's block selector is a union, so an explicit
+      // `blockNumber: undefined` is not the same as omitting it.
+      ...(blockNumber === undefined ? {} : { blockNumber }),
+    })
+}
+
+async function checkSignature(
+  wallet: `0x${string}`,
+  typedData: OwnershipTypedData | LegacyOwnershipTypedData,
+  signature: `0x${string}`,
+  verifyContract: VerifyContractFn,
+  blockNumber?: bigint,
+): Promise<ProofCheck> {
+  // Offline first. For an EOA this is pure arithmetic over bytes already
+  // onchain: no server, no RPC, verifiable by anyone forever.
+  try {
+    const recovered = await recoverTypedDataAddress({ ...typedData, signature })
+    if (recovered.toLowerCase() === wallet.toLowerCase()) return { wallet, status: 'eoa' }
+  } catch {
+    // Not a plain 65-byte ECDSA signature — a smart-account wrapper, most
+    // likely. Note this path is NOT reached by an EIP-7702 delegated EOA
+    // that signs with its own key: recovery succeeds there even though the
+    // account has code, which is why offline recovery is tried first.
+  }
+  try {
+    const valid = await verifyContract({ address: wallet, typedData, signature, blockNumber })
+    return { wallet, status: valid ? 'contract' : 'invalid' }
+  } catch (e) {
+    return {
+      wallet,
+      status: 'unchecked',
+      reason: e instanceof Error ? e.message : 'signature check unavailable',
+    }
+  }
+}
+
+export interface VerifyOwnershipArgs {
+  recipient: `0x${string}`
+  extras: `0x${string}`[]
+  /** Aligned with extras. The attester's slot, if among the extras, holds '0x'. */
+  proofs: `0x${string}`[]
+  /** '0x' when the recipient is the attester. */
+  recipientProof: `0x${string}`
+  /** att.attester when verifying; the connected wallet when attesting; null = no exemption. */
+  attester: `0x${string}` | null
+  issuedAt: number
+  /** att.timeCreated when verifying, now when attesting. */
+  at: number
+  chainId?: number
+  /** Public Base RPCs prune state, so as-of-block ERC-1271 needs an archive node. */
+  blockNumber?: bigint
+}
+
+// Checks aligned [recipient, ...extras]: every wallet in the set is either the
+// transaction sender (EAS records it as the attester — that IS its proof) or
+// must carry a signature that verifies.
 export async function verifyOwnershipProofs(
   args: VerifyOwnershipArgs,
   io: OwnershipIO = {},
 ): Promise<ProofCheck[]> {
   const chainId = args.chainId ?? ATTEST_CHAIN_ID
-  const verifyContract =
-    io.verifyContractSignature ??
-    (({ address, typedData, signature, blockNumber }: VerifyContractSignatureArgs) =>
-      clientFor(chainId).verifyTypedData({
-        address,
-        ...typedData,
-        signature,
-        // Spread conditionally: viem's block selector is a union, so an explicit
-        // `blockNumber: undefined` is not the same as omitting it.
-        ...(blockNumber === undefined ? {} : { blockNumber }),
-      }))
+  const verifyContract = io.verifyContractSignature ?? defaultVerifyContract(chainId)
+  const attester = args.attester?.toLowerCase() ?? null
+  const wallets = [args.recipient, ...args.extras]
+  const proofs = [args.recipientProof, ...args.proofs]
+
+  return Promise.all(
+    wallets.map(async (wallet, i): Promise<ProofCheck> => {
+      // Before any proof check: msg.sender is authoritative and free, so
+      // whatever occupies the attester's slot is irrelevant.
+      if (wallet.toLowerCase() === attester) return { wallet, status: 'attester' }
+
+      const signature = proofs[i]
+      if (!signature || signature === '0x') return { wallet, status: 'missing' }
+
+      // Both bounds, checked before any network call: signatures expire 24h
+      // after their anchor, and cannot postdate the attestation they live in.
+      if (args.at > args.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS || args.at < args.issuedAt) {
+        return { wallet, status: 'expired' }
+      }
+
+      const typedData = ownershipTypedData({
+        recipient: args.recipient,
+        wallet,
+        extras: args.extras,
+        issuedAt: args.issuedAt,
+        chainId,
+      })
+      return checkSignature(wallet, typedData, signature, verifyContract, args.blockNumber)
+    }),
+  )
+}
+
+export interface LegacyVerifyOwnershipArgs {
+  primary: `0x${string}`
+  extras: `0x${string}`[]
+  proofs: `0x${string}`[]
+  computedAt: number
+  at: number
+  chainId?: number
+  blockNumber?: bigint
+}
+
+// Verification for attestations that predate payload v2. Checks aligned with
+// extras (the primary was exempt by construction back then).
+export async function verifyLegacyOwnershipProofs(
+  args: LegacyVerifyOwnershipArgs,
+  io: OwnershipIO = {},
+): Promise<ProofCheck[]> {
+  const chainId = args.chainId ?? ATTEST_CHAIN_ID
+  const verifyContract = io.verifyContractSignature ?? defaultVerifyContract(chainId)
 
   return Promise.all(
     args.extras.map(async (wallet, i): Promise<ProofCheck> => {
       const signature = args.proofs[i]
       if (!signature || signature === '0x') return { wallet, status: 'missing' }
-
-      // Checked before any network call — nothing is gained by asking a contract
-      // about a signature whose consent window has already closed.
       if (args.at > args.computedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
         return { wallet, status: 'expired' }
       }
-
-      const typedData = ownershipTypedData({
+      const typedData = legacyOwnershipTypedData({
         primary: args.primary,
         wallet,
         extras: args.extras,
         computedAt: args.computedAt,
         chainId,
       })
-
-      // Offline first. For an EOA this is pure arithmetic over bytes already
-      // onchain: no server, no RPC, verifiable by anyone forever.
-      try {
-        const recovered = await recoverTypedDataAddress({
-          ...typedData,
-          signature,
-        })
-        if (recovered.toLowerCase() === wallet.toLowerCase()) return { wallet, status: 'eoa' }
-      } catch {
-        // Not a plain 65-byte ECDSA signature — a smart-account wrapper, most
-        // likely. Note this path is NOT reached by an EIP-7702 delegated EOA
-        // that signs with its own key: recovery succeeds there even though the
-        // account has code, which is why offline recovery is tried first.
-      }
-
-      try {
-        const valid = await verifyContract({
-          address: wallet,
-          typedData,
-          signature,
-          blockNumber: args.blockNumber,
-        })
-        return { wallet, status: valid ? 'contract' : 'invalid' }
-      } catch (e) {
-        return {
-          wallet,
-          status: 'unchecked',
-          reason: e instanceof Error ? e.message : 'signature check unavailable',
-        }
-      }
+      return checkSignature(wallet, typedData, signature, verifyContract, args.blockNumber)
     }),
   )
 }
