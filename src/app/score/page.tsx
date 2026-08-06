@@ -7,7 +7,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr'
 import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { Button } from '@/components/ui/button'
-import { scorePath } from '@/lib/routes'
+import { inputPath, scorePath } from '@/lib/routes'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { GithubSignIn } from '@/components/github-sign-in'
 import { useGithubAuth } from '@/components/use-github-auth'
@@ -181,6 +181,14 @@ function ScoreForm() {
         />
       </div>
       <GithubSignIn
+        // Sign-in leaves the page; everything typed so far must ride along in
+        // the return URL or it is lost. inputPath emits exactly the params the
+        // form's initializers above read back.
+        returnTo={inputPath(
+          addressInput,
+          githubInput,
+          extraInputs.map((row) => row.value),
+        )}
         onVerified={(login) => {
           githubTouched.current = true
           setGithubInput(login)

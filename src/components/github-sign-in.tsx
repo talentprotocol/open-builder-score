@@ -8,7 +8,20 @@ import { clearGithubAuth, setGithubAuth } from '@/lib/github-auth-store'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { Badge } from '@/components/ui/badge'
 
-export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => void }) {
+export function GithubSignIn({
+  onVerified,
+  returnTo,
+}: {
+  onVerified?: (login: string) => void
+  /**
+   * Sign-in is a top-level navigation to github.com and back, so any in-page
+   * state the caller wants to survive the round-trip must be encoded in this
+   * URL — the default (current pathname + query) only preserves what was
+   * already in the address bar when the page loaded, not what the user typed
+   * since.
+   */
+  returnTo?: string
+}) {
   const auth = useGithubAuth()
   const router = useRouter()
   const pathname = usePathname()
@@ -60,7 +73,7 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
   // Never round-trip a stale error through sign-in.
   const params = new URLSearchParams(searchParams)
   params.delete(ERROR_PARAM)
-  const returnTo = `${pathname}${params.toString() ? `?${params}` : ''}`
+  const target = returnTo ?? `${pathname}${params.toString() ? `?${params}` : ''}`
 
   return (
     <div className="flex flex-col gap-1 text-sm text-muted-foreground">
@@ -83,7 +96,7 @@ export function GithubSignIn({ onVerified }: { onVerified?: (login: string) => v
           // A plain link, not a fetch: this is a top-level navigation to
           // github.com and back, so there is no in-page state to keep alive
           // and nothing to poll.
-          <a href={signInHref(returnTo)} className="self-start underline">
+          <a href={signInHref(target)} className="self-start underline">
             Sign in with GitHub to verify your handle
           </a>
         )}
