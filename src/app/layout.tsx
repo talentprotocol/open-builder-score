@@ -43,11 +43,14 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${calSans.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col blueprint-grid">
+      <body className="flex min-h-dvh flex-col blueprint-grid">
         <Providers>
-          <Header />
-          {children}
-          <Footer />
+          {/* Flex shell so main flex-1 pushes the footer to the viewport bottom. */}
+          <div className="flex min-h-dvh flex-1 flex-col">
+            <Header />
+            {children}
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>
