@@ -11,8 +11,10 @@ import {
   parseAttestationResponse,
   scoreVerdict,
   validateAttestation,
+  verifyAttestationOwnership,
   type OnchainAttestation,
 } from '@/lib/verify'
+import { OWNERSHIP_PROOF_TTL_SECONDS } from '@/lib/ownership'
 import {
   ATTEST_SCHEMA_UID,
   ATTEST_AGGREGATE_SCHEMA_UID,
@@ -479,5 +481,44 @@ describe('isAttesterInSet', () => {
     expect(
       isAttesterInSet({ ...att, attester: '0x000000000000000000000000000000000000dEaD' }, decoded),
     ).toBe(false)
+  })
+})
+
+// Ownership is checkable whenever the wallet set and proofs decode — it does
+// not depend on the spec version being comparable. This dispatcher is what
+// both the recomputed and the not-comparable verify paths share.
+describe('verifyAttestationOwnership', () => {
+  const io = { verifyContractSignature: async () => false }
+
+  it('has nothing to check for a single-wallet attestation', async () => {
+    const att = attestation()
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    expect(await verifyAttestationOwnership(att, decoded, io)).toEqual([])
+  })
+
+  it('checks the full v3 set, recipient included, with the attester exempt', async () => {
+    const att = aggregateAttestation({ schemaId: ATTEST_AGGREGATE_SCHEMA_UID, data: dataV3 })
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    const checks = await verifyAttestationOwnership(att, decoded, io)
+    // attester === recipient; the extras carry garbage bytes, not signatures.
+    expect(checks.map((c) => c.status)).toEqual(['attester', 'invalid', 'invalid'])
+  })
+
+  it('anchors the v3 validity window to the attestation time', async () => {
+    const att = aggregateAttestation({
+      schemaId: ATTEST_AGGREGATE_SCHEMA_UID,
+      data: dataV3,
+      timeCreated: 1784975866 + OWNERSHIP_PROOF_TTL_SECONDS + 1,
+    })
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    const checks = await verifyAttestationOwnership(att, decoded, io)
+    expect(checks.map((c) => c.status)).toEqual(['attester', 'expired', 'expired'])
+  })
+
+  it('checks only the extras on a legacy aggregate', async () => {
+    const att = aggregateAttestation() // verify-url schema: no proofsIssuedAt
+    const decoded = decodeAttestationData(att.data, att.schemaId)!
+    const checks = await verifyAttestationOwnership(att, decoded, io)
+    expect(checks.map((c) => c.wallet)).toEqual([EXTRA_A, EXTRA_B])
   })
 })
