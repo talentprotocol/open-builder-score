@@ -14,7 +14,13 @@ import {
   EASSCAN_SITE,
   KNOWN_SCHEMA_UIDS,
 } from './eas'
-import { MAX_EXTRA_WALLETS } from './ownership'
+import {
+  MAX_EXTRA_WALLETS,
+  verifyLegacyOwnershipProofs,
+  verifyOwnershipProofs,
+  type OwnershipIO,
+  type ProofCheck,
+} from './ownership'
 import type { ScoreResult, Spec } from './types'
 
 const spec = specJson as Spec
@@ -400,4 +406,41 @@ export function classifyAttestation(
 export function scoreVerdict(attestedScore: number, recomputed: ScoreResult): VerifyVerdict {
   if (!recomputed.complete) return 'incomplete'
   return recomputed.total === attestedScore ? 'match' : 'diverged'
+}
+
+// Ownership is signature recovery over the decoded wallet set — it does not
+// depend on the spec version being comparable, so every verify path that has
+// a decoded aggregate must run it, the not-comparable one included. Otherwise
+// a fabricated aggregate need only carry an outdated spec string to dodge the
+// ownership verdict entirely.
+export async function verifyAttestationOwnership(
+  att: OnchainAttestation,
+  decoded: DecodedScoreAttestation,
+  io: OwnershipIO = {},
+): Promise<ProofCheck[]> {
+  if (decoded.extraWallets.length === 0) return []
+  if (decoded.proofsIssuedAt !== null) {
+    return verifyOwnershipProofs(
+      {
+        recipient: decoded.wallet,
+        extras: decoded.extraWallets,
+        proofs: decoded.ownershipProofs,
+        recipientProof: decoded.recipientProof ?? '0x',
+        attester: att.attester as `0x${string}`,
+        issuedAt: decoded.proofsIssuedAt,
+        at: att.timeCreated,
+      },
+      io,
+    )
+  }
+  return verifyLegacyOwnershipProofs(
+    {
+      primary: decoded.wallet,
+      extras: decoded.extraWallets,
+      proofs: decoded.ownershipProofs,
+      computedAt: decoded.computedAt,
+      at: att.timeCreated,
+    },
+    io,
+  )
 }

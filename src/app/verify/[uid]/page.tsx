@@ -17,17 +17,13 @@ import {
   isAttesterInSet,
   isSelfAttested,
   scoreVerdict,
+  verifyAttestationOwnership,
   type DecodedScoreAttestation,
   type OnchainAttestation,
   type VerifyVerdict,
 } from '@/lib/verify'
 import { EASSCAN_SITE } from '@/lib/eas'
-import {
-  aggregateProofSummary,
-  verifyLegacyOwnershipProofs,
-  verifyOwnershipProofs,
-  type ProofCheck,
-} from '@/lib/ownership'
+import { aggregateProofSummary, type ProofCheck } from '@/lib/ownership'
 import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
@@ -48,6 +44,8 @@ type State =
       reason: 'revoked' | 'spec_mismatch'
       attestation: OnchainAttestation
       decoded: DecodedScoreAttestation
+      /** Checked even without a comparable spec — ownership is independent of it. */
+      ownership: ProofCheck[]
     }
   | {
       phase: 'done'
@@ -94,6 +92,40 @@ const OWNERSHIP_COPY: Record<ProofCheck['status'], { tone: string; text: string 
   // msg.sender: EAS itself recorded this wallet as the attester. Free, onchain,
   // and as permanent as the attestation.
   attester: { tone: 'text-success-text', text: '✓ proved by sending this attestation' },
+}
+
+// For an aggregate, the ownership claim IS the content — the score is
+// recomputable by anyone. So a failed proof outranks whatever banner follows
+// it (score verdict, revocation, spec mismatch), without ever entering the
+// verdict machinery itself: classification and scoreVerdict stay
+// ownership-blind by design.
+function OwnershipBanners({ ownership }: { ownership: ProofCheck[] }) {
+  if (ownership.length === 0) return null
+  const summary = aggregateProofSummary(ownership)
+  return (
+    <>
+      {summary === 'failed' && (
+        <FadeRise>
+          <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <h1 className="text-base font-medium text-destructive-text">⚠ Ownership not proven</h1>
+            <p className="text-sm text-muted-foreground">
+              One or more wallets in this aggregate carry no valid signature — and anyone can
+              attest an aggregate naming wallets they don&apos;t own. Treat the aggregation itself
+              as unverified, whatever the score says.
+            </p>
+          </div>
+        </FadeRise>
+      )}
+      {summary === 'some_unchecked' && (
+        <FadeRise>
+          <p className="text-sm text-muted-foreground">
+            · Some ownership signatures couldn&apos;t be checked right now — the aggregate is
+            unconfirmed, not disproven.
+          </p>
+        </FadeRise>
+      )}
+    </>
+  )
 }
 
 function AttestationDetails({
@@ -312,11 +344,19 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         return
       }
       if (classification.kind === 'revoked' || classification.kind === 'spec_mismatch') {
+        // An unexpected failure degrades to "not checked", never to a hidden
+        // verdict — the page still renders the record it fetched.
+        const ownership = await verifyAttestationOwnership(
+          fetched.attestation,
+          classification.decoded,
+        ).catch(() => [] as ProofCheck[])
+        if (cancelled) return
         setState({
           phase: 'not_comparable',
           reason: classification.kind,
           attestation: fetched.attestation,
           decoded: classification.decoded,
+          ownership,
         })
         return
       }
@@ -350,26 +390,10 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         // Ownership is checked alongside the recompute and deliberately never
         // folded into the verdict: score correctness and wallet ownership are
         // independent facts, and are displayed as two.
-        const ownership =
-          classification.decoded.extraWallets.length > 0
-            ? classification.decoded.proofsIssuedAt !== null
-              ? await verifyOwnershipProofs({
-                  recipient: classification.decoded.wallet,
-                  extras: classification.decoded.extraWallets,
-                  proofs: classification.decoded.ownershipProofs,
-                  recipientProof: classification.decoded.recipientProof ?? '0x',
-                  attester: fetched.attestation.attester as `0x${string}`,
-                  issuedAt: classification.decoded.proofsIssuedAt,
-                  at: fetched.attestation.timeCreated,
-                })
-              : await verifyLegacyOwnershipProofs({
-                  primary: classification.decoded.wallet,
-                  extras: classification.decoded.extraWallets,
-                  proofs: classification.decoded.ownershipProofs,
-                  computedAt: classification.decoded.computedAt,
-                  at: fetched.attestation.timeCreated,
-                })
-            : []
+        const ownership = await verifyAttestationOwnership(
+          fetched.attestation,
+          classification.decoded,
+        )
         if (cancelled) return
         setState({
           phase: 'done',
@@ -449,6 +473,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
       {state.phase === 'not_comparable' && (
         <section className="flex flex-col gap-6">
+          <OwnershipBanners ownership={state.ownership} />
           <FadeRise>
             <div className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/10 p-4">
               {state.reason === 'revoked' ? (
@@ -457,18 +482,18 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
                     This attestation was revoked.
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    It was an authentic Builder Score attestation, but it has since been revoked
+                    It was a real Builder Score attestation, but it has since been revoked
                     onchain — treat it as withdrawn.
                   </p>
                 </>
               ) : (
                 <>
                   <h1 className="text-base font-medium text-warning-text">
-                    Authentic attestation, different spec version.
+                    Real onchain record, different spec version.
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     It was computed with spec v{state.decoded.specVersion}; this app recomputes spec v
-                    {spec.version}, so an exact comparison isn’t possible.
+                    {spec.version}, so the score can’t be checked — only what the record says.
                   </p>
                 </>
               )}
@@ -476,7 +501,11 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
           </FadeRise>
 
           <FadeRise delay={0.1}>
-            <AttestationDetails attestation={state.attestation} decoded={state.decoded} />
+            <AttestationDetails
+              attestation={state.attestation}
+              decoded={state.decoded}
+              ownership={state.ownership}
+            />
           </FadeRise>
 
           <Link href={verifyPath()} className="text-base text-muted-foreground underline hover:text-foreground">
@@ -487,33 +516,7 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
       {state.phase === 'done' && (
         <section className="flex flex-col gap-6">
-          {/* For an aggregate, the ownership claim IS the content — the score is
-              recomputable by anyone. So a failed proof outranks any score
-              verdict in the visual hierarchy, without ever entering the verdict
-              machinery itself (classification and scoreVerdict stay ownership-
-              blind by design). */}
-          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'failed' && (
-            <FadeRise>
-              <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-                <h1 className="text-base font-medium text-destructive-text">
-                  ⚠ Ownership not proven
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  One or more wallets in this aggregate carry no valid signature — and anyone can
-                  attest an aggregate naming wallets they don&apos;t own. Treat the aggregation
-                  itself as unverified, whatever the score says.
-                </p>
-              </div>
-            </FadeRise>
-          )}
-          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'some_unchecked' && (
-            <FadeRise>
-              <p className="text-sm text-muted-foreground">
-                · Some ownership signatures couldn&apos;t be checked right now — the aggregate is
-                unconfirmed, not disproven.
-              </p>
-            </FadeRise>
-          )}
+          <OwnershipBanners ownership={state.ownership} />
           {state.verdict === 'match' && (
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}

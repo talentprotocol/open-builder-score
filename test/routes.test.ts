@@ -6,6 +6,7 @@ import {
   credentialsPath,
   absoluteUrl,
   verifyWalletPath,
+  attestationsPath,
   SITE_ORIGIN,
 } from '@/lib/routes'
 
@@ -47,6 +48,12 @@ describe('inputPath', () => {
     expect(inputPath(WALLET, '')).toBe(`/score?wallet=${WALLET}`)
     expect(inputPath('', 'octocat')).toBe('/score?github=octocat')
     expect(inputPath('  ', null)).toBe('/score')
+  })
+})
+
+describe('attestationsPath', () => {
+  it('is the latest-attestations page', () => {
+    expect(attestationsPath()).toBe('/attestations')
   })
 })
 
