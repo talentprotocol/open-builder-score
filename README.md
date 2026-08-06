@@ -219,7 +219,7 @@ string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_pro
 
 **`verify_url` opens the verification view, not a fresh scoring run.** Someone reading an
 attestation wants to see what was verified, not start a new computation — so it points at
-`/verify/wallet/<primary>`, which resolves to that wallet's most recent attestation and hands
+`/verify/wallet/<recipient>`, which resolves to that wallet's most recent attestation and hands
 off to the verify screen.
 
 It is keyed on the wallet rather than on the attestation's own UID because **an attestation can
@@ -254,24 +254,24 @@ Three earlier cuts were superseded: #2304 (no URL field, 0 attestations), #2305
 kept the single-wallet schema alive. A #2306 record surfaces `verifyUrl: null`, so the screen
 never offers a link that recomputes instead of showing what was verified.
 
-`wallet` stays the primary — that keeps `recipient == wallet`, keeps `isSelfAttested`
-unchanged, and leaves `ownership_proofs[i]` a clean 1:1 with `extra_wallets[i]`. The primary
+`wallet` stays the recipient — that keeps `recipient == wallet`, keeps `isSelfAttested`
+unchanged, and leaves `ownership_proofs[i]` a clean 1:1 with `extra_wallets[i]`. The recipient
 needs no proof; `msg.sender` is its proof. `extra_wallets` is stored in canonical (sorted,
 deduped) order, so the onchain array *is* the array the verifier reconstructs against.
 
 Each extra wallet signs this, once, on Base Sepolia:
 
 ```
-domain  { name: 'Open Builder Score', version: '1', chainId: 84532, verifyingContract: <EAS> }
-message WalletOwnership { statement, wallet, primary, wallets[], computedAt, expiresAt }
+domain  { name: 'Open Builder Score', version: '2', chainId: 84532, verifyingContract: <EAS> }
+message WalletOwnership { statement, wallet, recipient, wallets[], issuedAt, expiresAt }
 ```
 
 - **Only the signature is stored.** The payload is reconstructed at verify time from fields
   already in the attestation, which is why the domain must be deterministic — no origin.
-- **`expiresAt` is derived** (`computed_at + 24h`), so nothing extra is stored and nothing can
+- **`expiresAt` is derived** (`issuedAt + 24h`), so nothing extra is stored and nothing can
   be forged. Verification checks the attestation's `timeCreated` falls inside that window;
   `timeCreated` is recorded by EAS, and the attester cannot pick it.
-- **No nonce is needed.** `primary` and the whole wallet set are bound into the message, so a
+- **No nonce is needed.** `recipient` and the whole wallet set are bound into the message, so a
   signature cannot be replayed into someone else's aggregate.
 - Signatures are stored **verbatim, never unwrapped** — a smart account returns an ABI-encoded
   wrapper, and while counterfactual an ERC-6492 one, which is exactly what makes it verifiable.
@@ -452,11 +452,14 @@ better flow; GitHub offers no secretless redirect.
   and anyone can check it afterwards by comparing `attester` to the attested `wallet`
   (`isSelfAttested` in `src/lib/verify.ts`, surfaced on the verify screen).
 
-  An aggregate has no `msg.sender` for wallets 2–5, so each of them signs an EIP-712
-  ownership message and **the signature is stored in the attestation**. That is the whole
-  difference from SIWE: the objection to a browser `personal_sign` was never the signature,
-  it was that the result never left the browser. A signature written onchain is checkable by
-  anyone, forever, with no server — and for EOAs, with no network call at all. SIWE itself is
-  still the wrong format here: its `domain` and `uri` are origin-bound, so a message couldn't
+  Attesting an aggregate requires every wallet in the set to be proven: the wallet that sends
+  the transaction is proven by `msg.sender` — EAS records it as the attester — and each of the
+  others by an EIP-712 signature stored inside the attestation. Any wallet of the set may be
+  the sender. The first wallet is simply the address the score is issued to (the EAS recipient,
+  where lookups find it); it has no signing privilege. That is the whole difference from SIWE:
+  the objection to a browser `personal_sign` was never the signature, it was that the result
+  never left the browser. A signature written onchain is checkable by anyone, forever, with no
+  server — and for EOAs, with no network call at all. SIWE itself is still the wrong format
+  here: its `domain` and `uri` are origin-bound, so a message couldn't
   be reconstructed at verify time across localhost, previews, and production without storing
   the origin too.

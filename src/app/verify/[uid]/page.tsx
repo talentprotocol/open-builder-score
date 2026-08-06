@@ -14,14 +14,20 @@ import {
   decodeAttestationData,
   fetchAttestation,
   isAttestationUid,
+  isAttesterInSet,
   isSelfAttested,
   scoreVerdict,
   type DecodedScoreAttestation,
   type OnchainAttestation,
   type VerifyVerdict,
 } from '@/lib/verify'
-import { EASSCAN_SITE, ATTEST_AGGREGATE_SCHEMA_UID, ATTEST_SCHEMA_UID } from '@/lib/eas'
-import { verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
+import { EASSCAN_SITE } from '@/lib/eas'
+import {
+  aggregateProofSummary,
+  verifyLegacyOwnershipProofs,
+  verifyOwnershipProofs,
+  type ProofCheck,
+} from '@/lib/ownership'
 import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
@@ -82,9 +88,12 @@ const OWNERSHIP_COPY: Record<ProofCheck['status'], { tone: string; text: string 
     text: '✓ accepted by the account contract (ERC-1271 — depends on its current owners)',
   },
   invalid: { tone: 'text-warning-text', text: '⚠ signature does not prove this wallet' },
-  expired: { tone: 'text-warning-text', text: '⚠ signed outside the scan’s validity window' },
+  expired: { tone: 'text-warning-text', text: '⚠ signed outside the proofs’ validity window' },
   missing: { tone: 'text-warning-text', text: '⚠ no ownership signature' },
   unchecked: { tone: 'text-muted-foreground', text: '· couldn’t check right now' },
+  // msg.sender: EAS itself recorded this wallet as the attester. Free, onchain,
+  // and as permanent as the attestation.
+  attester: { tone: 'text-success-text', text: '✓ proved by sending this attestation' },
 }
 
 function AttestationDetails({
@@ -146,7 +155,26 @@ function AttestationDetails({
         <dt className="shrink-0 text-muted-foreground">Attester</dt>
         <dd className="break-all text-right font-mono text-sm">
           {attestation.attester}
-          {isSelfAttested(attestation, decoded) ? (
+          {/* v3 aggregates only (proofsIssuedAt !== null): every wallet, the
+              recipient included, has its own proof slot, so "in the wallet
+              set" correctly implies the recipient was proven too. Legacy
+              aggregates (proofsIssuedAt === null) never had a recipient proof
+              slot — verifyLegacyOwnershipProofs checks extras only — so an
+              attacker attesting from a self-owned extra would otherwise show
+              "in the wallet set" green while the recipient (e.g. a whale) was
+              never proven to consent. Legacy falls back to the self-attested
+              pair, which correctly flags an attester that isn't the recipient. */}
+          {decoded.proofsIssuedAt !== null ? (
+            isAttesterInSet(attestation, decoded) ? (
+              <span className="block font-sans text-xs text-success-text">
+                ✓ In the wallet set — proved by sending this attestation
+              </span>
+            ) : (
+              <span className="block font-sans text-xs text-warning-text">
+                ⚠ Outside the wallet set — every wallet must carry its own signature
+              </span>
+            )
+          ) : isSelfAttested(attestation, decoded) ? (
             <span className="block font-sans text-xs text-success-text">
               ✓ Self-attested — the scored wallet signed this itself
             </span>
@@ -205,9 +233,7 @@ function AttestationDetails({
         <dt className="shrink-0 text-muted-foreground">Schema</dt>
         <dd className="text-right text-sm">
           <a
-            href={`${EASSCAN_SITE}/schema/view/${
-              decoded.version === 2 ? ATTEST_AGGREGATE_SCHEMA_UID : ATTEST_SCHEMA_UID
-            }`}
+            href={`${EASSCAN_SITE}/schema/view/${attestation.schemaId}`}
             target="_blank"
             rel="noreferrer"
             className="text-success-text underline"
@@ -246,14 +272,25 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
   useEffect(() => {
     if (!isAttestationUid(uid)) {
-      setState({
-        phase: 'invalid',
-        problems: ['not a valid attestation UID (0x…, 64 hex chars)'],
+      // Deferred one microtask out, matching the pattern used throughout the
+      // codebase for effect-triggered setState: reading `uid` is the kind of
+      // external sync effects exist for, but the state update itself must
+      // not happen synchronously in the effect body.
+      queueMicrotask(() => {
+        setState({
+          phase: 'invalid',
+          problems: ['not a valid attestation UID (0x…, 64 hex chars)'],
+        })
       })
       return
     }
     let cancelled = false
-    setState({ phase: 'loading', step: 'Fetching attestation…', settled: [] })
+    // Same deferral as above: resets to loading (relevant when `uid` changes
+    // after a previous 'done'/'invalid' render) without setting state
+    // synchronously in the effect body.
+    queueMicrotask(() => {
+      if (!cancelled) setState({ phase: 'loading', step: 'Fetching attestation…', settled: [] })
+    })
     ;(async () => {
       const fetched = await fetchAttestation(uid)
       if (cancelled) return
@@ -315,13 +352,23 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
         // independent facts, and are displayed as two.
         const ownership =
           classification.decoded.extraWallets.length > 0
-            ? await verifyOwnershipProofs({
-                primary: classification.decoded.wallet,
-                extras: classification.decoded.extraWallets,
-                proofs: classification.decoded.ownershipProofs,
-                computedAt: classification.decoded.computedAt,
-                at: fetched.attestation.timeCreated,
-              })
+            ? classification.decoded.proofsIssuedAt !== null
+              ? await verifyOwnershipProofs({
+                  recipient: classification.decoded.wallet,
+                  extras: classification.decoded.extraWallets,
+                  proofs: classification.decoded.ownershipProofs,
+                  recipientProof: classification.decoded.recipientProof ?? '0x',
+                  attester: fetched.attestation.attester as `0x${string}`,
+                  issuedAt: classification.decoded.proofsIssuedAt,
+                  at: fetched.attestation.timeCreated,
+                })
+              : await verifyLegacyOwnershipProofs({
+                  primary: classification.decoded.wallet,
+                  extras: classification.decoded.extraWallets,
+                  proofs: classification.decoded.ownershipProofs,
+                  computedAt: classification.decoded.computedAt,
+                  at: fetched.attestation.timeCreated,
+                })
             : []
         if (cancelled) return
         setState({
@@ -440,6 +487,33 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
       {state.phase === 'done' && (
         <section className="flex flex-col gap-6">
+          {/* For an aggregate, the ownership claim IS the content — the score is
+              recomputable by anyone. So a failed proof outranks any score
+              verdict in the visual hierarchy, without ever entering the verdict
+              machinery itself (classification and scoreVerdict stay ownership-
+              blind by design). */}
+          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'failed' && (
+            <FadeRise>
+              <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+                <h1 className="text-base font-medium text-destructive-text">
+                  ⚠ Ownership not proven
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  One or more wallets in this aggregate carry no valid signature — and anyone can
+                  attest an aggregate naming wallets they don&apos;t own. Treat the aggregation
+                  itself as unverified, whatever the score says.
+                </p>
+              </div>
+            </FadeRise>
+          )}
+          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'some_unchecked' && (
+            <FadeRise>
+              <p className="text-sm text-muted-foreground">
+                · Some ownership signatures couldn&apos;t be checked right now — the aggregate is
+                unconfirmed, not disproven.
+              </p>
+            </FadeRise>
+          )}
           {state.verdict === 'match' && (
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
@@ -463,6 +537,12 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
                   Scores drift as public data changes. A divergence doesn’t mean the attestation was
                   wrong when it was made — it means the data has moved since.
                 </p>
+                {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'failed' && (
+                  <p className="text-sm text-muted-foreground">
+                    The score also diverges — but with ownership unproven, that is the lesser
+                    problem.
+                  </p>
+                )}
               </div>
             </FadeRise>
           )}

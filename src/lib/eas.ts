@@ -5,7 +5,7 @@ import { absoluteUrl, verifyWalletPath } from './routes'
 import type { WalletClient } from 'viem'
 
 // OP-stack predeploys — same address on Base and Base Sepolia.
-// Verified against EAS docs at registration time (Task 11).
+// Verified against EAS docs at registration time.
 export const EAS_CONTRACT_ADDRESS = '0x4200000000000000000000000000000000000021' as const
 export const SCHEMA_REGISTRY_ADDRESS = '0x4200000000000000000000000000000000000020' as const
 
@@ -13,10 +13,9 @@ export const SCHEMA_REGISTRY_ADDRESS = '0x42000000000000000000000000000000000000
 export const ATTEST_SCHEMA =
   'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number'
 
-// Aggregate (multi-wallet) scores. `wallet` stays the primary — it keeps the
+// Aggregate (multi-wallet) scores. `wallet` stays the recipient — it keeps the
 // recipient == wallet invariant, keeps isSelfAttested unchanged, and leaves
-// ownership_proofs[i] a clean 1:1 with extra_wallets[i]. The primary needs no
-// proof: EAS records the attester as msg.sender, which is its proof.
+// ownership_proofs[i] a clean 1:1 with extra_wallets[i].
 //
 // ownership_proofs is bytes[] rather than a fixed width because a smart account
 // returns an ABI-encoded wrapper — and, while still counterfactual, an ERC-6492
@@ -24,7 +23,7 @@ export const ATTEST_SCHEMA =
 // unwrapped: the wrapper is what makes a counterfactual signature verifiable.
 // verify_url points at the verification view for this wallet, not at a fresh
 // scoring run — someone reading the record wants what was verified, not a new
-// computation. It is keyed on the primary wallet rather than on this
+// computation. It is keyed on the recipient wallet rather than on this
 // attestation's UID because an attestation cannot contain a link to itself:
 // EAS hashes both the record's own data AND block.timestamp into the UID, so
 // the UID is neither self-containable nor knowable before the tx is mined.
@@ -35,8 +34,25 @@ export const ATTEST_SCHEMA =
 // Protocol with no permissionless source, so a verifier can confirm some and
 // only echo the rest. verify.ts classifies each, and the verify screen says
 // which is which rather than implying all were proven.
+//
+// v3 (2026-08-05): any wallet of the set may send the attestation. The sender
+// needs no stored proof — EAS records it as the attester, which is its proof —
+// so exactly one proof slot is '0x': recipient_ownership_proof when the
+// recipient sends, or that extra's ownership_proofs slot. proofs_issued_at is
+// the shared EIP-712 anchor every signature binds; a forged value makes every
+// proof fail recovery, so it cannot be quietly edited.
+//
+// Registered on Base Sepolia (2026-08-05) as schema #2308, resolver 0x0, revocable.
+// tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76.
+// Golden-pinned in test/eas.test.ts, verified against SchemaRegistry.getSchema and easscan.
 export const ATTEST_AGGREGATE_SCHEMA =
-  'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
+  'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,bytes recipient_ownership_proof,uint64 proofs_issued_at,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
+
+export const ATTEST_AGGREGATE_SCHEMA_UID = computeSchemaUid(
+  ATTEST_AGGREGATE_SCHEMA,
+  zeroAddress,
+  true,
+)
 
 export const ATTEST_CHAIN_ID: number = 84532 // Base Sepolia first; switch to 8453 (Base) post-registration
 
@@ -56,14 +72,6 @@ export function computeSchemaUid(
 // Deterministic: identical on every chain for (schema, zero resolver, revocable=true).
 // Registration (Task 11) must produce exactly this UID or the config is wrong.
 export const ATTEST_SCHEMA_UID = computeSchemaUid(ATTEST_SCHEMA, zeroAddress, true)
-
-// Registered on Base Sepolia (2026-08-04), resolver 0x0, revocable.
-// Golden-pinned in test/eas.test.ts — a change here breaks aggregate attestation.
-export const ATTEST_AGGREGATE_SCHEMA_UID = computeSchemaUid(
-  ATTEST_AGGREGATE_SCHEMA,
-  zeroAddress,
-  true,
-)
 
 // Superseded by ATTEST_AGGREGATE_SCHEMA (score_url + badges replaced the
 // prefix), but real attestations exist against it and must keep verifying —
@@ -88,11 +96,25 @@ export const ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID = computeSchemaUid(
   true,
 )
 
+// Demoted 2026-08-05: predates the recipient proof slot. Decode-only.
+export const ATTEST_AGGREGATE_VERIFY_URL_SCHEMA =
+  'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
+
+// Registered on Base Sepolia (2026-08-04), resolver 0x0, revocable.
+// Golden-pinned in test/eas.test.ts — a change here breaks decoding of every
+// aggregate attestation made before the recipient proof slot existed.
+export const ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID = computeSchemaUid(
+  ATTEST_AGGREGATE_VERIFY_URL_SCHEMA,
+  zeroAddress,
+  true,
+)
+
 export const KNOWN_SCHEMA_UIDS = [
   ATTEST_SCHEMA_UID,
   ATTEST_AGGREGATE_SCHEMA_UID,
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
   ATTEST_AGGREGATE_SCORE_URL_SCHEMA_UID,
+  ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
 ] as const
 
 export interface AttestParams {
@@ -112,10 +134,26 @@ function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner {
   return new JsonRpcSigner(provider, account.address)
 }
 
+// Every message a preflight check below can throw before a signer or
+// transaction exists — none of them mean "the attestation failed onchain",
+// so the caller (attest-panel's handleAttest) shows these verbatim instead
+// of routing them through the generic post-tx wallet-error mapping.
+export const AGGREGATE_PREFLIGHT_ERRORS: readonly string[] = [
+  'wallet not connected',
+  'an aggregate attestation needs at least one extra wallet',
+  'every extra wallet needs exactly one ownership proof',
+  'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
+  'exactly one wallet — the one sending the transaction — may rely on msg.sender as its proof',
+]
+
 export interface AggregateAttestParams extends AttestParams {
   /** Canonical order — canonicalExtraWallets(). Index i pairs with ownershipProofs[i]. */
   extraWallets: `0x${string}`[]
+  /** The attester's slot — recipient or extra — holds '0x'. */
   ownershipProofs: `0x${string}`[]
+  recipientProof: `0x${string}`
+  /** The shared issuedAt anchor every proof binds. */
+  proofsIssuedAt: number
   /** Slugs of the badges earned at scan time. Zero-point by construction. */
   badges: string[]
 }
@@ -138,6 +176,8 @@ export function encodeAggregateAttestationData(
     { name: 'wallet', value: params.wallet, type: 'address' },
     { name: 'extra_wallets', value: params.extraWallets, type: 'address[]' },
     { name: 'ownership_proofs', value: params.ownershipProofs, type: 'bytes[]' },
+    { name: 'recipient_ownership_proof', value: params.recipientProof, type: 'bytes' },
+    { name: 'proofs_issued_at', value: BigInt(params.proofsIssuedAt), type: 'uint64' },
     { name: 'github_handle', value: params.githubHandle ?? '', type: 'string' },
     { name: 'score', value: params.score, type: 'uint16' },
     { name: 'computed_at', value: BigInt(params.computedAt), type: 'uint64' },
@@ -155,13 +195,38 @@ export async function attestAggregateScore(
   const eas = new EAS(EAS_CONTRACT_ADDRESS)
   eas.connect(signer)
 
+  const account = params.walletClient.account
+  if (!account) throw new Error('wallet not connected')
+  const slots: Array<[`0x${string}`, `0x${string}`]> = [
+    [params.recipient, params.recipientProof],
+    ...params.extraWallets.map((w, i): [`0x${string}`, `0x${string}`] => [w, params.ownershipProofs[i]]),
+  ]
+  // A slot must be exactly '0x' (the attester exemption) or a real proof
+  // byte string — never undefined/missing, which would otherwise sail into
+  // SchemaEncoder and fail there with an opaque SDK error instead of this one.
+  const malformed = slots.filter(
+    ([, proof]) =>
+      proof !== '0x' && !(typeof proof === 'string' && proof.startsWith('0x') && proof.length > 2),
+  )
+  if (malformed.length > 0) {
+    throw new Error(
+      'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
+    )
+  }
+  const empty = slots.filter(([, proof]) => proof === '0x')
+  if (empty.length !== 1 || empty[0][0].toLowerCase() !== account.address.toLowerCase()) {
+    throw new Error(
+      'exactly one wallet — the one sending the transaction — may rely on msg.sender as its proof',
+    )
+  }
+
   const data = encodeAggregateAttestationData({ ...params, wallet: params.recipient })
 
   const tx = await eas.attest({
     schema: ATTEST_AGGREGATE_SCHEMA_UID,
     data: {
-      // Recipient is the primary, so history and the percentile corpus stay
-      // keyed the same way they are for single-wallet attestations.
+      // The recipient anchors history and the percentile corpus the same way
+      // it does for single-wallet attestations.
       recipient: params.recipient,
       expirationTime: NO_EXPIRATION,
       revocable: true,

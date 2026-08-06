@@ -21,7 +21,7 @@ export interface ScoreAttestationSummary {
   uid: string
   score: number
   specVersion: string
-  /** 1 for a single-wallet attestation, primary + extras for an aggregate. */
+  /** 1 for a single-wallet attestation, recipient + extras for an aggregate. */
   walletCount: number
   timeCreated: number
   revoked: boolean

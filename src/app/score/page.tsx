@@ -7,7 +7,7 @@ import { XIcon } from '@phosphor-icons/react/dist/ssr'
 import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { Button } from '@/components/ui/button'
-import { scorePath } from '@/lib/routes'
+import { inputPath, scorePath } from '@/lib/routes'
 import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { GithubSignIn } from '@/components/github-sign-in'
 import { useGithubAuth } from '@/components/use-github-auth'
@@ -70,11 +70,11 @@ function ScoreForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    const primary = addressInput.trim()
+    const recipient = addressInput.trim()
     const extras = extraInputs.map((w) => w.value.trim()).filter((w) => w !== '')
     setError(null)
     setResolving(true)
-    const results = await Promise.all([primary, ...extras].map(resolveWallet))
+    const results = await Promise.all([recipient, ...extras].map(resolveWallet))
     setResolving(false)
     const failedAt = results.findIndex((r) => 'error' in r)
     if (failedAt !== -1) {
@@ -82,16 +82,16 @@ function ScoreForm() {
       setError(prefix + (results[failedAt] as { error: string }).error)
       return
     }
-    const [primaryAddress, ...extraAddresses] = results.map(
+    const [recipientAddress, ...extraAddresses] = results.map(
       (r) => (r as { address: string }).address,
     )
-    const seen = new Set([primaryAddress.toLowerCase()])
+    const seen = new Set([recipientAddress.toLowerCase()])
     const deduped = extraAddresses.filter((a) => {
       if (seen.has(a.toLowerCase())) return false
       seen.add(a.toLowerCase())
       return true
     })
-    router.push(scorePath(primaryAddress, githubInput, deduped))
+    router.push(scorePath(recipientAddress, githubInput, deduped))
   }
 
   return (
@@ -181,6 +181,14 @@ function ScoreForm() {
         />
       </div>
       <GithubSignIn
+        // Sign-in leaves the page; everything typed so far must ride along in
+        // the return URL or it is lost. inputPath emits exactly the params the
+        // form's initializers above read back.
+        returnTo={inputPath(
+          addressInput,
+          githubInput,
+          extraInputs.map((row) => row.value),
+        )}
         onVerified={(login) => {
           githubTouched.current = true
           setGithubInput(login)
