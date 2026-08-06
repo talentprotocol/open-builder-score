@@ -7,58 +7,63 @@ import { ThemeToggle } from '@/components/theme-toggle'
 
 const SCHEMA_URL = `${EASSCAN_SITE}/schema/view/${ATTEST_SCHEMA_UID}`
 
+const productLinkClass =
+  'text-sm opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100'
+
+const externalLinkClass =
+  'text-sm opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100'
+
 export function Footer() {
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4">
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <p className="text-sm text-muted-foreground">
             An open score anyone can recompute from public data.
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Link
-            href={credentialsPath()}
-            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+
+        <div className="border-t border-border" />
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <nav
+            aria-label="Site"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2"
           >
-            Credentials
-          </Link>
-          <Link
-            href={badgesPath()}
-            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          >
-            Badges
-          </Link>
-          <Link
-            href={verifyPath()}
-            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          >
-            Verify
-          </Link>
-          <Link
-            href={attestationsPath()}
-            className="text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          >
-            Attestations
-          </Link>
-          <a
-            href={SCHEMA_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1 text-base opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          >
-            EAS schema <ArrowUpRightIcon className="size-3" />
-          </a>
-          <a
-            href="https://www.talentprotocol.com"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Talent Protocol"
-            className="opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-          >
-            <TalentWordmark className="h-4 w-auto" />
-          </a>
+            <Link href={credentialsPath()} className={productLinkClass}>
+              Credentials
+            </Link>
+            <Link href={badgesPath()} className={productLinkClass}>
+              Badges
+            </Link>
+            <Link href={verifyPath()} className={productLinkClass}>
+              Verify
+            </Link>
+            <Link href={attestationsPath()} className={productLinkClass}>
+              Attestations
+            </Link>
+          </nav>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={SCHEMA_URL}
+              target="_blank"
+              rel="noreferrer"
+              className={`flex items-center gap-1 ${externalLinkClass}`}
+            >
+              EAS schema <ArrowUpRightIcon className="size-3" />
+            </a>
+            <a
+              href="https://www.talentprotocol.com"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Talent Protocol"
+              className={externalLinkClass}
+            >
+              <TalentWordmark className="h-4 w-auto" />
+            </a>
+          </div>
         </div>
       </div>
     </footer>
