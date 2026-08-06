@@ -22,7 +22,12 @@ import {
   type VerifyVerdict,
 } from '@/lib/verify'
 import { EASSCAN_SITE } from '@/lib/eas'
-import { verifyLegacyOwnershipProofs, verifyOwnershipProofs, type ProofCheck } from '@/lib/ownership'
+import {
+  aggregateProofSummary,
+  verifyLegacyOwnershipProofs,
+  verifyOwnershipProofs,
+  type ProofCheck,
+} from '@/lib/ownership'
 import { classifyAttestedBadges, type BadgeEvidence } from '@/lib/badges'
 import type { ScoreResult, Spec } from '@/lib/types'
 import { scorePath, verifyPath } from '@/lib/routes'
@@ -482,6 +487,33 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
 
       {state.phase === 'done' && (
         <section className="flex flex-col gap-6">
+          {/* For an aggregate, the ownership claim IS the content — the score is
+              recomputable by anyone. So a failed proof outranks any score
+              verdict in the visual hierarchy, without ever entering the verdict
+              machinery itself (classification and scoreVerdict stay ownership-
+              blind by design). */}
+          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'failed' && (
+            <FadeRise>
+              <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+                <h1 className="text-base font-medium text-destructive-text">
+                  ⚠ Ownership not proven
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  One or more wallets in this aggregate carry no valid signature — and anyone can
+                  attest an aggregate naming wallets they don&apos;t own. Treat the aggregation
+                  itself as unverified, whatever the score says.
+                </p>
+              </div>
+            </FadeRise>
+          )}
+          {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'some_unchecked' && (
+            <FadeRise>
+              <p className="text-sm text-muted-foreground">
+                · Some ownership signatures couldn&apos;t be checked right now — the aggregate is
+                unconfirmed, not disproven.
+              </p>
+            </FadeRise>
+          )}
           {state.verdict === 'match' && (
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
@@ -505,6 +537,12 @@ export default function VerifyUidPage({ params }: { params: Promise<{ uid: strin
                   Scores drift as public data changes. A divergence doesn’t mean the attestation was
                   wrong when it was made — it means the data has moved since.
                 </p>
+                {state.ownership.length > 0 && aggregateProofSummary(state.ownership) === 'failed' && (
+                  <p className="text-sm text-muted-foreground">
+                    The score also diverges — but with ownership unproven, that is the lesser
+                    problem.
+                  </p>
+                )}
               </div>
             </FadeRise>
           )}
