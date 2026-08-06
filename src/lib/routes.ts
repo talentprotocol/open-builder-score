@@ -55,6 +55,10 @@ export function verifyWalletPath(wallet: string): string {
   return `/verify/wallet/${wallet}`
 }
 
+export function attestationsPath(): string {
+  return '/attestations'
+}
+
 export function credentialsPath(slug: string | null = null): string {
   return slug ? `/credentials#${slug}` : '/credentials'
 }
