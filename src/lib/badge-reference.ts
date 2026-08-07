@@ -9,8 +9,7 @@
 
 import { allowlists } from './allowlists'
 import { badgeChecks } from './badges'
-import { snapshotMeta } from './snapshots'
-import type { BadgeCheck, BadgeDefinition } from './types'
+import type { BadgeDefinition } from './types'
 
 const CHAIN_LABELS: Record<string, string> = {
   'eth-mainnet': 'Ethereum',
@@ -22,54 +21,27 @@ const CHAIN_LABELS: Record<string, string> = {
   'celo-mainnet': 'Celo',
 }
 
-const CHECK_DESCRIPTIONS: Record<BadgeCheck, string> = {
-  snapshot: 'Membership in a dated export from Talent Protocol.',
-  allowlist: 'Membership in a frozen set rebuilt from public chain history.',
-  rpc: '', // built per badge from its call + chains
-}
-
-function describeRpcCheck(badge: BadgeDefinition): string {
-  if (!badge.call || !badge.contracts) {
-    throw new Error(`rpc badge ${badge.slug} needs a call and contracts to describe`)
-  }
-  const chains = badge.contracts.map((c) => CHAIN_LABELS[c.chain] ?? c.chain).join(' and ')
-  return `Live read of ${badge.call} on ${chains}.`
-}
-
-// Every check a badge runs, spelled out. Badges with two of them say so —
-// hiding the second would misrepresent where an earned badge came from.
+// One line per check, named concretely: the contract call a live read makes,
+// the size and chains of a frozen set, the export a membership comes from.
+// Checks are OR'd — either one earns the badge — so a badge with two joins
+// them with "or"; hiding the second would misrepresent where an earned badge
+// came from.
 export function describeBadgeCheck(badge: BadgeDefinition): string {
-  const checks = badgeChecks(badge)
-  if (checks.length === 0) return 'No check configured.'
-  return checks
-    .map((check) => (check === 'rpc' ? describeRpcCheck(badge) : CHECK_DESCRIPTIONS[check]))
-    .join(' ')
-}
-
-/**
- * Where the evidence physically lives, named concretely: the chains an
- * allowlist was rebuilt from, the contract call a live read makes, the date on
- * an export. The results ledger shows only the evidence class; this is the
- * page that has room to say which chains and which contract.
- */
-export function badgeSourceDetail(
-  badge: BadgeDefinition,
-  asOf: string | null = snapshotMeta.generated_at,
-): string {
   const chainList = (chains: string[]) =>
-    chains.map((c) => CHAIN_LABELS[c] ?? c).join(' + ')
+    chains.map((c) => CHAIN_LABELS[c] ?? c).join(' and ')
 
   const segments = badgeChecks(badge).map((check) => {
     if (check === 'rpc') {
-      return `${chainList((badge.contracts ?? []).map((c) => c.chain))} · ${badge.call ?? 'onchain read'}`
+      if (!badge.call || !badge.contracts) {
+        throw new Error(`rpc badge ${badge.slug} needs a call and contracts to describe`)
+      }
+      return `Live read of ${badge.call} on ${chainList(badge.contracts.map((c) => c.chain))}.`
     }
     if (check === 'allowlist') {
       const list = badge.allowlist ? allowlists[badge.allowlist] : undefined
-      return `${chainList(Object.keys(list?.chains ?? {}))} · ${list?.count ?? 0} from factory history`
+      return `Frozen set of ${list?.count ?? 0} wallets from factory history on ${chainList(Object.keys(list?.chains ?? {}))}.`
     }
-    return `Talent Protocol export · ${asOf ?? 'not published yet'}`
+    return 'Talent Protocol export.'
   })
-  // Checks are OR'd: either one earns the badge, and the result never records
-  // which fired.
-  return segments.length > 0 ? segments.join(' or ') : 'No check configured'
+  return segments.length > 0 ? segments.join(' or ') : 'No check configured.'
 }
