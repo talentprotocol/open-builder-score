@@ -437,6 +437,16 @@ This replaced an OAuth **device flow**, which needed no secret but asked the use
 code into a second tab — a TV/CLI affordance, not a web one. The secret is the price of the
 better flow; GitHub offers no secretless redirect.
 
+## Data-transfer opt-out (temporary)
+
+One exception to "no backend, no database of people, zero server-side state" above: while
+Talent Protocol winds down, three routes under `/api/opt-out/*` proxy the data-transfer
+opt-out flow to the legacy talent-api, which already implements it. They exist only because
+every talent-api request needs a server-side `TALENT_API_KEY` that must never reach the
+browser — the routes forward the submitted email or token straight through and store
+nothing here. See `src/lib/talent-api.ts` and the `TALENT_API_KEY` / `TALENT_API_URL`
+entries in `.env.example`.
+
 ## Ground rules
 
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.

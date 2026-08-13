@@ -1,0 +1,48 @@
+import { talentApiKey, talentApiUrl } from '@/lib/talent-api'
+
+const UPSTREAM_TIMEOUT_MS = 10_000
+
+// Step 1 of the opt-out flow: the visitor submits an email and talent-api
+// sends a confirmation link if (and only if) it matches an account. The
+// upstream 200 body is deliberately identical whether or not the email
+// matched — an anti-enumeration measure — so this proxy relays it verbatim
+// and must never attach anything that would let a caller tell the two cases
+// apart.
+export async function POST(request: Request): Promise<Response> {
+  let email = ''
+  try {
+    const body = (await request.json()) as Record<string, unknown> | null
+    email = typeof body?.email === 'string' ? body.email.trim() : ''
+  } catch {
+    email = ''
+  }
+  if (!email) {
+    return Response.json({ error: 'email is required' }, { status: 400 })
+  }
+
+  const apiKey = talentApiKey()
+  if (apiKey === null) {
+    return Response.json({ error: "Opt-out isn't configured on this deployment" }, { status: 503 })
+  }
+
+  let response: Response
+  try {
+    response = await fetch(`${talentApiUrl()}/data_transfer_opt_outs`, {
+      method: 'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    })
+  } catch {
+    return Response.json({ error: 'talent-api is unreachable' }, { status: 502 })
+  }
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    return Response.json({ error: 'talent-api returned an unexpected response' }, { status: 502 })
+  }
+
+  return Response.json(payload, { status: response.status })
+}

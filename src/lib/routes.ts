@@ -69,3 +69,14 @@ export function credentialsPath(slug: string | null = null): string {
 export function badgesPath(slug: string | null = null): string {
   return slug ? `/badges#${slug}` : '/badges'
 }
+
+// Data-transfer opt-out (temporary, Talent Protocol shutdown): the landing
+// page where a builder enters their email, and the token-keyed page a
+// confirmation email links to.
+export function dataOptOutPath(): string {
+  return '/data-opt-out'
+}
+
+export function dataOptOutConfirmPath(token: string): string {
+  return `/data-opt-out/confirm/${encodeURIComponent(token)}`
+}
