@@ -1,4 +1,4 @@
-import { talentApiKey, talentApiUrl } from '@/lib/talent-api'
+import { talentApiKey, talentApiUrl, visitorIp } from '@/lib/talent-api'
 
 const UPSTREAM_TIMEOUT_MS = 10_000
 
@@ -16,13 +16,17 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "Opt-out isn't configured on this deployment" }, { status: 503 })
   }
 
+  const headers: Record<string, string> = { 'X-API-KEY': apiKey }
+  const ip = visitorIp(request)
+  if (ip !== null) headers['X-Client-IP'] = ip
+
   let response: Response
   try {
     response = await fetch(
       `${talentApiUrl()}/data_transfer_opt_outs/status?token=${encodeURIComponent(token)}`,
       {
         method: 'GET',
-        headers: { 'X-API-KEY': apiKey },
+        headers,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
     )

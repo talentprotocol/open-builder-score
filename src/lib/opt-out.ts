@@ -28,6 +28,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 export type RequestOptOutResult =
   | { status: 'sent' }
   | { status: 'invalid'; message: string }
+  | { status: 'rate-limited' }
   | { status: 'unavailable' }
 
 export async function requestOptOut(
@@ -46,6 +47,7 @@ export async function requestOptOut(
   }
   if (response.status === 200) return { status: 'sent' }
   if (response.status === 422) return { status: 'invalid', message: await readErrorMessage(response) }
+  if (response.status === 429) return { status: 'rate-limited' }
   return { status: 'unavailable' }
 }
 

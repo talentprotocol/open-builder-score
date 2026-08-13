@@ -18,11 +18,28 @@ import { Button } from '@/components/ui/button'
 type State =
   | { phase: 'loading' }
   | { phase: 'invalid' }
+  // Distinct from 'invalid': a transient failure (429/502/503/timeout) says
+  // nothing about whether the token itself is good. Routing it to 'invalid'
+  // would tell a visitor their link expired when it didn't, and push them
+  // toward re-requesting — which, if they'd already confirmed, silently
+  // sends no email and stops them from ever getting through.
+  | { phase: 'unavailable' }
   | { phase: 'already-confirmed'; email: string }
   | { phase: 'ready'; email: string }
   | { phase: 'confirming'; email: string }
   | { phase: 'confirmed'; email: string }
   | { phase: 'error'; email: string; message: string }
+
+// Shared by the mount effect and the retry button so both apply the exact
+// same mapping from a status fetch to a render state.
+async function resolveStatus(token: string): Promise<State> {
+  const result = await fetchOptOutStatus(token)
+  if (result.status === 'invalid') return { phase: 'invalid' }
+  if (result.status === 'unavailable') return { phase: 'unavailable' }
+  return result.confirmed
+    ? { phase: 'already-confirmed', email: result.email }
+    : { phase: 'ready', email: result.email }
+}
 
 export default function DataOptOutConfirmPage({
   params,
@@ -45,22 +62,18 @@ export default function DataOptOutConfirmPage({
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const result = await fetchOptOutStatus(token)
-      if (cancelled) return
-      if (result.status !== 'ready') {
-        setState({ phase: 'invalid' })
-        return
-      }
-      setState(
-        result.confirmed
-          ? { phase: 'already-confirmed', email: result.email }
-          : { phase: 'ready', email: result.email },
-      )
+      const next = await resolveStatus(token)
+      if (!cancelled) setState(next)
     })()
     return () => {
       cancelled = true
     }
   }, [token])
+
+  async function handleRetryStatus() {
+    setState({ phase: 'loading' })
+    setState(await resolveStatus(token))
+  }
 
   async function handleConfirm() {
     if (state.phase !== 'ready' && state.phase !== 'error') return
@@ -94,7 +107,10 @@ export default function DataOptOutConfirmPage({
 
       {state.phase === 'invalid' && (
         <FadeRise>
-          <div className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/10 p-4">
+          <div
+            role="status"
+            className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/10 p-4"
+          >
             <h1 className="text-base font-medium text-warning-text">
               This link is invalid or has expired.
             </h1>
@@ -109,9 +125,31 @@ export default function DataOptOutConfirmPage({
         </FadeRise>
       )}
 
+      {state.phase === 'unavailable' && (
+        <FadeRise>
+          <div
+            role="status"
+            className="flex flex-col gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4"
+          >
+            <div className="flex flex-col gap-1">
+              <h1 className="text-base font-medium text-warning-text">
+                We couldn&apos;t check this link right now.
+              </h1>
+              <p className="text-sm text-muted-foreground">Please try again in a minute.</p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={handleRetryStatus} className="self-start">
+              Try again
+            </Button>
+          </div>
+        </FadeRise>
+      )}
+
       {state.phase === 'already-confirmed' && (
         <FadeRise>
-          <div className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4">
+          <div
+            role="status"
+            className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4"
+          >
             <h1 className="text-base font-medium text-success-text">
               This email has already been opted out.
             </h1>
@@ -148,16 +186,22 @@ export default function DataOptOutConfirmPage({
             )}
           </Button>
           {state.phase === 'error' && (
-            <p className="text-base text-destructive-text">{state.message}</p>
+            <p role="status" className="text-base text-destructive-text">
+              {state.message}
+            </p>
           )}
         </FadeRise>
       )}
 
       {state.phase === 'confirmed' && (
         <FadeRise>
-          <div className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4">
+          <div
+            role="status"
+            className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4"
+          >
             <h1 className="text-base font-medium text-success-text">
-              {state.email} has been opted out of the data transfer.
+              <span className="font-mono">{state.email}</span> has been opted out of the data
+              transfer.
             </h1>
           </div>
         </FadeRise>

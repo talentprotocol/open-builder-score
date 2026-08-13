@@ -77,9 +77,9 @@ describe('requestOptOut', () => {
     expect(result).toEqual({ status: 'invalid', message: 'Something went wrong.' })
   })
 
-  it('reports unavailable on 429', async () => {
+  it('reports rate-limited on 429', async () => {
     const result = await requestOptOut('builder@example.com', jsonResponse({ error: 'slow down' }, 429))
-    expect(result).toEqual({ status: 'unavailable' })
+    expect(result).toEqual({ status: 'rate-limited' })
   })
 
   it('reports unavailable on 503', async () => {

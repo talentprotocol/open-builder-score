@@ -8,10 +8,10 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-function postJson(url: string, body: unknown): Request {
+function postJson(url: string, body: unknown, extraHeaders: Record<string, string> = {}): Request {
   return new Request(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
     body: JSON.stringify(body),
   })
 }
@@ -127,6 +127,36 @@ describe('request route', () => {
     expect(body.error).not.toContain('ECONNREFUSED')
     expect(body.error).not.toContain('10.0.0.1')
   })
+
+  it('forwards the first x-forwarded-for hop upstream as X-Client-IP', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { success: true })
+    vi.stubGlobal('fetch', spy)
+
+    await requestPost(
+      postJson(
+        'http://localhost:3000/api/opt-out/request',
+        { email: 'builder@example.com' },
+        { 'x-forwarded-for': ' 203.0.113.5 , 10.0.0.1' },
+      ),
+    )
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(init.headers['X-Client-IP']).toBe('203.0.113.5')
+  })
+
+  it('omits X-Client-IP when x-forwarded-for is absent (local dev)', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { success: true })
+    vi.stubGlobal('fetch', spy)
+
+    await requestPost(
+      postJson('http://localhost:3000/api/opt-out/request', { email: 'builder@example.com' }),
+    )
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect('X-Client-IP' in init.headers).toBe(false)
+  })
 })
 
 describe('confirm route', () => {
@@ -197,6 +227,34 @@ describe('confirm route', () => {
       postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }),
     )
     expect(response.status).toBe(502)
+  })
+
+  it('forwards the first x-forwarded-for hop upstream as X-Client-IP', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { success: true, email: 'builder@example.com' })
+    vi.stubGlobal('fetch', spy)
+
+    await confirmPost(
+      postJson(
+        'http://localhost:3000/api/opt-out/confirm',
+        { token: 'tok123' },
+        { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' },
+      ),
+    )
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(init.headers['X-Client-IP']).toBe('203.0.113.5')
+  })
+
+  it('omits X-Client-IP when x-forwarded-for is absent (local dev)', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { success: true, email: 'builder@example.com' })
+    vi.stubGlobal('fetch', spy)
+
+    await confirmPost(postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }))
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect('X-Client-IP' in init.headers).toBe(false)
   })
 })
 
@@ -273,5 +331,31 @@ describe('status route', () => {
       new Request('http://localhost:3000/api/opt-out/status?token=tok123'),
     )
     expect(response.status).toBe(502)
+  })
+
+  it('forwards the first x-forwarded-for hop upstream as X-Client-IP', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: false })
+    vi.stubGlobal('fetch', spy)
+
+    await statusGet(
+      new Request('http://localhost:3000/api/opt-out/status?token=tok123', {
+        headers: { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' },
+      }),
+    )
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(init.headers['X-Client-IP']).toBe('203.0.113.5')
+  })
+
+  it('omits X-Client-IP when x-forwarded-for is absent (local dev)', async () => {
+    vi.stubEnv('TALENT_API_KEY', 'sekret')
+    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: false })
+    vi.stubGlobal('fetch', spy)
+
+    await statusGet(new Request('http://localhost:3000/api/opt-out/status?token=tok123'))
+
+    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect('X-Client-IP' in init.headers).toBe(false)
   })
 })

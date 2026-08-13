@@ -17,6 +17,7 @@ export default function DataOptOutPage() {
     const email = emailInput.trim()
     if (!isLikelyEmail(email)) {
       setValidationError('That doesn’t look like a valid email address.')
+      setResult(null)
       return
     }
     setValidationError(null)
@@ -33,12 +34,22 @@ export default function DataOptOutPage() {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col">
         <FadeRise>
-          <div className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4">
+          <div
+            role="status"
+            className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-4"
+          >
             <h1 className="text-base font-medium text-success-text">Check your inbox</h1>
             <p className="text-sm text-muted-foreground">
               If that email belongs to a Talent Protocol account, we&apos;ve sent a confirmation
               link. Check your inbox.
             </p>
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="self-start text-sm text-muted-foreground underline hover:text-foreground"
+            >
+              Use a different email
+            </button>
           </div>
         </FadeRise>
       </main>
@@ -83,10 +94,17 @@ export default function DataOptOutPage() {
           </Button>
           {validationError && <p className="text-base text-destructive-text">{validationError}</p>}
           {result?.status === 'invalid' && (
-            <p className="text-base text-destructive-text">{result.message}</p>
+            <p role="status" className="text-base text-destructive-text">
+              {result.message}
+            </p>
+          )}
+          {result?.status === 'rate-limited' && (
+            <p role="status" className="text-base text-destructive-text">
+              Too many requests — please wait a minute and try again.
+            </p>
           )}
           {result?.status === 'unavailable' && (
-            <p className="text-base text-destructive-text">
+            <p role="status" className="text-base text-destructive-text">
               Something went wrong — please try again later.
             </p>
           )}
