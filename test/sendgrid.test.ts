@@ -94,6 +94,40 @@ describe('sendOptOutConfirmationEmail', () => {
     }
   })
 
+  it('HTML-escapes firstName/to/confirmUrl in the html part while leaving the text part raw', async () => {
+    const spy = upstream(202)
+    vi.stubGlobal('fetch', spy)
+
+    const dangerousName = 'Ada <script>alert(1)</script> & "Co"'
+    const dangerousTo = 'builder+<b>evil@example.com'
+
+    await sendOptOutConfirmationEmail(
+      { to: dangerousTo, firstName: dangerousName, confirmUrl: CONFIRM_URL },
+      KEY,
+    )
+
+    const [, init] = calls(spy)[0]
+    const body = JSON.parse(init.body as string)
+    const textPart = body.content[0].value as string
+    const htmlPart = body.content[1].value as string
+
+    // The html part must not contain the raw, unescaped input anywhere...
+    expect(htmlPart).not.toContain('<script')
+    expect(htmlPart).not.toContain(dangerousName)
+    expect(htmlPart).not.toContain(dangerousTo)
+    // ...but the escaped forms should be present...
+    expect(htmlPart).toContain('Ada &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;Co&quot;')
+    expect(htmlPart).toContain('builder+&lt;b&gt;evil@example.com')
+    // ...and the confirm link itself must remain intact and unbroken.
+    expect(htmlPart).toContain(`<a href="${CONFIRM_URL}">Confirm opt-out</a>`)
+
+    // The text part has no markup semantics, so it stays raw (unescaped).
+    expect(textPart).toContain(dangerousName)
+    expect(textPart).toContain(dangerousTo)
+    expect(textPart).not.toContain('&lt;')
+    expect(textPart).not.toContain('&amp;')
+  })
+
   it('throws on a non-202 response', async () => {
     vi.stubGlobal('fetch', upstream(400))
 

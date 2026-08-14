@@ -20,6 +20,22 @@ export function sendgridApiKey(): string | null {
   return typeof key === 'string' && key !== '' ? key : null
 }
 
+// `firstName` originates from `records.name` — free text exported from a
+// legacy DB, not something this app controls the shape of — and `to` /
+// `confirmUrl` are interpolated into markup too. Any of `& < > " '` in there
+// would otherwise produce malformed HTML, in the worst case breaking the
+// `<a href>` confirm link this email exists to deliver. `&` must be escaped
+// first so the escape sequences of the later replacements don't themselves
+// get re-escaped.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // SendGrid requires text/plain to precede text/html in the `content` array
 // when both are present — order the entries that way, not alphabetically or
 // by preference.
@@ -29,10 +45,12 @@ export async function sendOptOutConfirmationEmail(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   const { to, firstName, confirmUrl } = params
-  const greeting = `Hi ${firstName ?? 'there'},`
+  const greetName = firstName ?? 'there'
 
+  // Plain text has no markup semantics, so this branch stays raw — escaping
+  // it would show users literal `&amp;` sequences instead of their own name.
   const text = [
-    greeting,
+    `Hi ${greetName},`,
     '',
     `You asked to opt ${to} out of the Talent Protocol data transfer. Click the link below to confirm — the link works for 30 days.`,
     '',
@@ -42,9 +60,9 @@ export async function sendOptOutConfirmationEmail(
   ].join('\n')
 
   const html = [
-    `<p>${greeting}</p>`,
-    `<p>You asked to opt <b>${to}</b> out of the Talent Protocol data transfer. Click the button below to confirm — the link works for 30 days.</p>`,
-    `<p><a href="${confirmUrl}">Confirm opt-out</a></p>`,
+    `<p>Hi ${escapeHtml(greetName)},</p>`,
+    `<p>You asked to opt <b>${escapeHtml(to)}</b> out of the Talent Protocol data transfer. Click the button below to confirm — the link works for 30 days.</p>`,
+    `<p><a href="${escapeHtml(confirmUrl)}">Confirm opt-out</a></p>`,
     "<p>If you didn't request this, you can ignore this email and no changes will be made.</p>",
   ].join('')
 
