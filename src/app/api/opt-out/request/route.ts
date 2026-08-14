@@ -10,15 +10,21 @@ import {
 import { sendgridApiKey, sendOptOutConfirmationEmail } from '@/lib/sendgrid'
 import { dataOptOutConfirmPath } from '@/lib/routes'
 
+// Explicit function-duration ceiling, in seconds. Vercel's Hobby tier
+// defaults to 10s if this isn't set — uncomfortably close to the 8s
+// internal deadline below — so this pins the assumption instead of relying
+// on whatever default the deployment tier happens to have.
+export const maxDuration = 30
+
 const SUCCESS_BODY = '{"success":true}'
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000
-// Comfortably under the platform's function-duration limit. Neither
-// supabase-admin nor sendgrid takes an abort signal, so a black-hole stall
-// on either call (unlike a fast connection-refused, which the catch-all
-// below already handles) could otherwise hang this handler until the
-// platform itself returns a 5xx — reachable only on the matched-email path,
-// which would turn that timing into exactly the oracle this route exists to
+// Comfortably under the `maxDuration` above. Neither supabase-admin nor
+// sendgrid takes an abort signal, so a black-hole stall on either call
+// (unlike a fast connection-refused, which the catch-all below already
+// handles) could otherwise hang this handler until the platform itself
+// times the function out — reachable only on the matched-email path, which
+// would turn that timing into exactly the oracle this route exists to
 // prevent. `withDeadline` guarantees the identical success body no later
 // than this many milliseconds after validation, regardless of what's
 // stalled.

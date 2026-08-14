@@ -75,7 +75,7 @@ function optOutRow(overrides: Partial<OptOutRow> = {}): OptOutRow {
     id: 42,
     email: 'builder@example.com',
     token_digest: 'a'.repeat(64),
-    expires_at: '2026-09-13T00:00:00.000Z',
+    expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
     confirmed_at: null,
     last_sent_at: null,
     ...overrides,
@@ -230,7 +230,15 @@ describe('request route', () => {
   it('re-mints and resends once the cooldown has elapsed, without touching confirmed_at', async () => {
     configuredKeys()
     vi.mocked(findRecordNameByEmail).mockResolvedValue({ name: 'Ada Builder' })
-    const existing = optOutRow({ last_sent_at: new Date(Date.now() - 10 * 60_000).toISOString() })
+    // expires_at is set clearly in the past (rather than relying on the
+    // optOutRow() default) so the greater-than assertion below can't land on
+    // the same millisecond as the freshly minted expires_at — the request
+    // route never reads an existing row's expires_at when re-minting, so
+    // this doesn't change what the test exercises.
+    const existing = optOutRow({
+      last_sent_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+    })
     vi.mocked(getOptOutByEmail).mockResolvedValue(existing)
     vi.mocked(updateOptOut).mockResolvedValue(undefined)
     vi.mocked(sendOptOutConfirmationEmail).mockResolvedValue(undefined)

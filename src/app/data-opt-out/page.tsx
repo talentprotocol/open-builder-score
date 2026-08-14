@@ -27,9 +27,10 @@ export default function DataOptOutPage() {
     setResult(outcome)
   }
 
-  // Enumeration-neutral by design: talent-api returns the same 200 whether or
-  // not the email matched an account, and this page can't say more than the
-  // response does — see the request proxy route for why.
+  // Enumeration-neutral by design: the request route (src/app/api/opt-out/
+  // request/route.ts) returns the same 200 whether or not the email matched
+  // a record, and this page can't say more than the response does — see
+  // that route for why.
   if (result?.status === 'sent') {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 flex flex-col">

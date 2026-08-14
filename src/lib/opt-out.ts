@@ -1,8 +1,9 @@
 // Client-side helpers for the data-transfer opt-out flow. These call this
-// app's own proxy routes (src/app/api/opt-out/*) — never talent-api
-// directly, so the browser never needs TALENT_API_KEY — and never throw:
-// every failure mode, network errors included, comes back as a tagged
-// result the caller can render directly.
+// app's own routes (src/app/api/opt-out/*), which hold the Supabase and
+// SendGrid credentials server-side — the browser never sees
+// SUPABASE_SECRET_KEY or SENDGRID_API_KEY — and never throw: every failure
+// mode, network errors included, comes back as a tagged result the caller
+// can render directly.
 
 const REQUEST_PATH = '/api/opt-out/request'
 const CONFIRM_PATH = '/api/opt-out/confirm'
@@ -10,8 +11,8 @@ const STATUS_PATH = '/api/opt-out/status'
 
 // Pragmatic, not RFC 5322: a non-empty local part, an @, and a dot with
 // something on both sides of it in the domain. Good enough to catch a typo
-// before it costs a round trip — talent-api's own validation is the source
-// of truth on submit.
+// before it costs a round trip — the request route runs this same check
+// again server-side on submit, and that copy is the source of truth.
 export function isLikelyEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 }
@@ -47,6 +48,11 @@ export async function requestOptOut(
   }
   if (response.status === 200) return { status: 'sent' }
   if (response.status === 422) return { status: 'invalid', message: await readErrorMessage(response) }
+  // Not dead code: this route itself never emits 429, but a Vercel Firewall
+  // rate rule on /api/opt-out is a planned, mandatory rollout step, and it
+  // answers with 429 for this fetch before the request reaches our handler.
+  // Keep this branch so rate-limited users get the specific copy below
+  // instead of the generic "unavailable" state.
   if (response.status === 429) return { status: 'rate-limited' }
   return { status: 'unavailable' }
 }

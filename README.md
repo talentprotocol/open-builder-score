@@ -451,10 +451,13 @@ and send one confirmation email via SendGrid; nothing else is stored server-side
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.
 - `spec.json` is versioned; any weight/credential change bumps the version. Attestations
   carry the version they were computed with.
-- Zero secrets **in the repo** and zero server-side state. `GITHUB_CLIENT_SECRET` is the
-  single exception, and it stays an environment variable read only by server code — GitHub
-  has no PKCE, so a redirect sign-in cannot be done without one. Everything that computes a
-  score still runs in the browser against public endpoints with no keys.
+- Zero secrets **in the repo**. `GITHUB_CLIENT_SECRET` is a server-only environment variable
+  read only by server code — GitHub has no PKCE, so a redirect sign-in cannot be done without
+  one — and everything that computes a score still runs in the browser against public
+  endpoints with no keys. The temporary data-transfer opt-out flow (see above) is the
+  exception to "zero server-side state": `SUPABASE_SECRET_KEY` and `SENDGRID_API_KEY` are two
+  more server-only secrets, and the opt-out records described above are real server-side
+  state — the app stores nothing else server-side.
 - **Wallet ownership is proved by the attestation.** Anyone may score any address — that's
   the point of an open score — but attesting requires the connected wallet to *be* the scored
   wallet. EAS records the attester as `msg.sender`, so the transaction itself is the proof
