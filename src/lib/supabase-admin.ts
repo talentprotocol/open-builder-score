@@ -127,9 +127,11 @@ export async function getOptOutByDigest(
 }
 
 // The `opt_outs.email` unique constraint is the anti-duplicate guard: a
-// second insert for an already-tracked email comes back as PostgREST 409,
-// which the caller (the request route) treats as "look up the existing row
-// and update it instead" rather than an error.
+// second, concurrent insert for the same email comes back as PostgREST 409.
+// The caller (the request route) treats that as a double-submit race — the
+// other request already owns the row and will send its own confirmation
+// email — and responds with success without inserting, updating, or sending
+// again.
 export async function insertOptOut(
   fields: { email: string; token_digest: string; expires_at: string; last_sent_at: string },
   key: string,

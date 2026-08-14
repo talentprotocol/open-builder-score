@@ -32,7 +32,12 @@ vi.mock('@/lib/sendgrid', () => ({
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  vi.clearAllMocks()
+  // resetAllMocks (not clearAllMocks): clearing only wipes call history and
+  // leaves a `mockReturnValue`/`mockResolvedValue` set by one test in place
+  // for the next one. Every test below configures exactly the mock behavior
+  // it needs, so isolation must not depend on run order.
+  vi.resetAllMocks()
+  vi.useRealTimers()
 })
 
 function postJson(url: string, body: unknown, extraHeaders: Record<string, string> = {}): Request {
@@ -87,16 +92,19 @@ describe('request route', () => {
   it('rejects a missing email with 400', async () => {
     const response = await requestPost(postJson(REQUEST_URL, {}))
     expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'email is required' })
   })
 
   it('rejects a blank email with 400', async () => {
     const response = await requestPost(postJson(REQUEST_URL, { email: '   ' }))
     expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'email is required' })
   })
 
   it('rejects an unparseable body with 400', async () => {
     const response = await requestPost(postRaw(REQUEST_URL, 'not json'))
     expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'email is required' })
   })
 
   it("reports 503 when Supabase isn't configured", async () => {
@@ -206,6 +214,20 @@ describe('request route', () => {
     expect(insertOptOut).not.toHaveBeenCalled()
   })
 
+  it('treats an unparseable last_sent_at as within cooldown (fails closed, no resend)', async () => {
+    configuredKeys()
+    vi.mocked(findRecordNameByEmail).mockResolvedValue({ name: 'Ada Builder' })
+    vi.mocked(getOptOutByEmail).mockResolvedValue(optOutRow({ last_sent_at: 'not-a-timestamp' }))
+
+    const response = await requestPost(postJson(REQUEST_URL, { email: 'builder@example.com' }))
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe(SUCCESS_BODY)
+    expect(sendOptOutConfirmationEmail).not.toHaveBeenCalled()
+    expect(updateOptOut).not.toHaveBeenCalled()
+    expect(insertOptOut).not.toHaveBeenCalled()
+  })
+
   it('re-mints and resends once the cooldown has elapsed, without touching confirmed_at', async () => {
     configuredKeys()
     vi.mocked(findRecordNameByEmail).mockResolvedValue({ name: 'Ada Builder' })
@@ -300,6 +322,34 @@ describe('request route', () => {
     await requestPost(postJson(REQUEST_URL, { email: '  Builder@Example.COM  ' }))
 
     expect(findRecordNameByEmail).toHaveBeenCalledWith('builder@example.com', SUPABASE_KEY)
+  })
+
+  it('returns success within the deadline when a lookup call never settles, and logs nothing', async () => {
+    vi.useFakeTimers()
+    configuredKeys()
+    // Simulates a black-hole stall (no reject, no resolve — unlike a fast
+    // connection-refused, which the catch-all already covers): under an
+    // upstream outage this is the exact path that would otherwise let a
+    // platform timeout leak whether the email matched.
+    vi.mocked(findRecordNameByEmail).mockReturnValue(new Promise(() => {}))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const responsePromise = requestPost(postJson(REQUEST_URL, { email: 'builder@example.com' }))
+    await vi.advanceTimersByTimeAsync(8_000)
+    const response = await responsePromise
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe(SUCCESS_BODY)
+    expect(sendOptOutConfirmationEmail).not.toHaveBeenCalled()
+    expect(logSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    logSpy.mockRestore()
+    warnSpy.mockRestore()
+    errorSpy.mockRestore()
   })
 })
 

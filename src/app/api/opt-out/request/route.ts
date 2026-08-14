@@ -13,6 +13,16 @@ import { dataOptOutConfirmPath } from '@/lib/routes'
 const SUCCESS_BODY = '{"success":true}'
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000
+// Comfortably under the platform's function-duration limit. Neither
+// supabase-admin nor sendgrid takes an abort signal, so a black-hole stall
+// on either call (unlike a fast connection-refused, which the catch-all
+// below already handles) could otherwise hang this handler until the
+// platform itself returns a 5xx — reachable only on the matched-email path,
+// which would turn that timing into exactly the oracle this route exists to
+// prevent. `withDeadline` guarantees the identical success body no later
+// than this many milliseconds after validation, regardless of what's
+// stalled.
+const REQUEST_DEADLINE_MS = 8_000
 
 // Step 1 of the opt-out flow: the visitor submits an email; if it matches a
 // record from the export, this mints a confirmation token (stored only as
@@ -20,11 +30,12 @@ const RESEND_COOLDOWN_MS = 2 * 60 * 1000
 //
 // The response is deliberately identical — `SUCCESS_BODY`, byte for byte —
 // whether the email matched, missed, is on cooldown, is already confirmed,
-// lost the insert race to a concurrent request, or the send itself failed.
-// That is the anti-enumeration property this route exists to protect, so
-// nothing past the format check may change the status or body. For the same
-// reason a caught error is never logged or echoed: its message can carry the
-// upstream PostgREST request URL, which embeds the email address.
+// lost the insert race to a concurrent request, the send itself failed, or
+// nothing settled before the deadline. That is the anti-enumeration
+// property this route exists to protect, so nothing past the format check
+// may change the status or body. For the same reason a caught error is
+// never logged or echoed: its message can carry the upstream PostgREST
+// request URL, which embeds the email address.
 export async function POST(request: Request): Promise<Response> {
   let email: unknown
   try {
@@ -48,36 +59,67 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Invalid email format' }, { status: 422 })
   }
 
+  const origin = new URL(request.url).origin
+  const work = mintAndSend(normalized, supabaseKey, sendgridKey, origin).catch(() => success())
+  return withDeadline(work, REQUEST_DEADLINE_MS)
+}
+
+async function mintAndSend(
+  normalized: string,
+  supabaseKey: string,
+  sendgridKey: string,
+  origin: string,
+): Promise<Response> {
+  const record = await findRecordNameByEmail(normalized, supabaseKey)
+  if (!record) return success()
+
+  const existing = await getOptOutByEmail(normalized, supabaseKey)
+  if (existing?.confirmed_at) return success()
+  if (isWithinCooldown(existing?.last_sent_at)) return success()
+
+  const token = randomBytes(32).toString('hex')
+  const fields = {
+    token_digest: createHash('sha256').update(token).digest('hex'),
+    expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+    last_sent_at: new Date().toISOString(),
+  }
+
+  if (existing) {
+    await updateOptOut(existing.id, fields, supabaseKey)
+  } else if ((await insertOptOut({ email: normalized, ...fields }, supabaseKey)) === 'conflict') {
+    // Double-submit race: another request already owns this email's row
+    // and will send its own confirmation email.
+    return success()
+  }
+
+  const confirmUrl = new URL(dataOptOutConfirmPath(token), origin).toString()
+  await sendOptOutConfirmationEmail({ to: normalized, firstName: record.name, confirmUrl }, sendgridKey)
+  return success()
+}
+
+// An unparseable `last_sent_at` fails closed (treated as "just sent", so no
+// resend goes out) rather than open (which would re-mint and re-send on
+// every request) — the safer failure direction here is less email, not more.
+function isWithinCooldown(lastSentAt: string | null | undefined): boolean {
+  if (!lastSentAt) return false
+  const sentAt = Date.parse(lastSentAt)
+  if (Number.isNaN(sentAt)) return true
+  return Date.now() - sentAt < RESEND_COOLDOWN_MS
+}
+
+// Races `work` against a fixed deadline that resolves (never rejects) to the
+// same success response. The deadline's timer is always cleared in
+// `finally`, so the common case — `work` settling well within budget —
+// never leaves a stray timer behind.
+async function withDeadline(work: Promise<Response>, ms: number): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<Response>((resolve) => {
+    timer = setTimeout(() => resolve(success()), ms)
+  })
   try {
-    const record = await findRecordNameByEmail(normalized, supabaseKey)
-    if (!record) return success()
-
-    const existing = await getOptOutByEmail(normalized, supabaseKey)
-    if (existing?.confirmed_at) return success()
-    if (existing?.last_sent_at && Date.now() - Date.parse(existing.last_sent_at) < RESEND_COOLDOWN_MS) {
-      return success()
-    }
-
-    const token = randomBytes(32).toString('hex')
-    const fields = {
-      token_digest: createHash('sha256').update(token).digest('hex'),
-      expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
-      last_sent_at: new Date().toISOString(),
-    }
-
-    if (existing) {
-      await updateOptOut(existing.id, fields, supabaseKey)
-    } else if ((await insertOptOut({ email: normalized, ...fields }, supabaseKey)) === 'conflict') {
-      // Double-submit race: another request already owns this email's row
-      // and will send its own confirmation email.
-      return success()
-    }
-
-    const confirmUrl = new URL(dataOptOutConfirmPath(token), new URL(request.url).origin).toString()
-    await sendOptOutConfirmationEmail({ to: normalized, firstName: record.name, confirmUrl }, sendgridKey)
-    return success()
-  } catch {
-    return success()
+    return await Promise.race([work, deadline])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 
