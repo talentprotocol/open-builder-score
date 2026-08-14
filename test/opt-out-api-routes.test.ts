@@ -7,21 +7,25 @@ import {
   supabaseSecretKey,
   findRecordNameByEmail,
   getOptOutByEmail,
+  getOptOutByDigest,
   insertOptOut,
   updateOptOut,
+  confirmOptOut,
   type OptOutRow,
 } from '@/lib/supabase-admin'
 import { sendgridApiKey, sendOptOutConfirmationEmail } from '@/lib/sendgrid'
 
-// The request route (unlike confirm/status, still proxying talent-api below)
-// no longer calls fetch directly — it goes through these two lib modules —
-// so its tests mock the modules instead of stubbing global fetch.
+// All three opt-out routes call into these two lib modules instead of fetch
+// directly, so their tests mock the modules rather than stubbing global
+// fetch.
 vi.mock('@/lib/supabase-admin', () => ({
   supabaseSecretKey: vi.fn(),
   findRecordNameByEmail: vi.fn(),
   getOptOutByEmail: vi.fn(),
+  getOptOutByDigest: vi.fn(),
   insertOptOut: vi.fn(),
   updateOptOut: vi.fn(),
+  confirmOptOut: vi.fn(),
 }))
 
 vi.mock('@/lib/sendgrid', () => ({
@@ -50,11 +54,6 @@ function postJson(url: string, body: unknown, extraHeaders: Record<string, strin
 
 function postRaw(url: string, body: string): Request {
   return new Request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
-}
-
-function upstreamJson(status: number, body: unknown): typeof fetch {
-  const spy = vi.fn(async () => new Response(JSON.stringify(body), { status }))
-  return spy as unknown as typeof fetch
 }
 
 const ORIGIN = 'http://localhost:3000'
@@ -353,203 +352,246 @@ describe('request route', () => {
   })
 })
 
+const CONFIRM_URL = `${ORIGIN}/api/opt-out/confirm`
+const STATUS_URL = `${ORIGIN}/api/opt-out/status`
+
 describe('confirm route', () => {
   it('rejects a missing token with 400', async () => {
-    const response = await confirmPost(postJson('http://localhost:3000/api/opt-out/confirm', {}))
+    const response = await confirmPost(postJson(CONFIRM_URL, {}))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'token is required' })
+    expect(supabaseSecretKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects a blank token with 400', async () => {
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: '   ' }))
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: 'token is required' })
   })
 
-  it('reports 503 when TALENT_API_KEY is unset', async () => {
-    vi.stubEnv('TALENT_API_KEY', '')
-    const spy = vi.fn()
-    vi.stubGlobal('fetch', spy)
-    const response = await confirmPost(
-      postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }),
-    )
+  it("reports 503 when Supabase isn't configured", async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(null)
+
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
     expect(response.status).toBe(503)
-    expect(spy).not.toHaveBeenCalled()
+    expect(await response.json()).toEqual({ error: "Opt-out isn't configured on this deployment" })
+    expect(getOptOutByDigest).not.toHaveBeenCalled()
   })
 
-  it('forwards to talent-api with the X-API-KEY header and relays a 200 verbatim', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, {
-      success: true,
-      email: 'builder@example.com',
-      confirmed_at: '2026-08-13T00:00:00Z',
-    })
-    vi.stubGlobal('fetch', spy)
+  it('reports 422 when no row matches the token digest', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(null)
 
-    const response = await confirmPost(
-      postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }),
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({ error: 'Invalid or expired link' })
+    expect(confirmOptOut).not.toHaveBeenCalled()
+  })
+
+  it('reports 422 for an expired, unconfirmed row', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(
+      optOutRow({ expires_at: new Date(Date.now() - 1_000).toISOString(), confirmed_at: null }),
     )
+
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({ error: 'Invalid or expired link' })
+    expect(confirmOptOut).not.toHaveBeenCalled()
+  })
+
+  it('returns 200 for an expired row that is already confirmed (confirmed-before-expired)', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    const row = optOutRow({
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+      confirmed_at: '2026-08-01T00:00:00.000Z',
+    })
+    vi.mocked(getOptOutByDigest).mockResolvedValue(row)
+
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       success: true,
-      email: 'builder@example.com',
-      confirmed_at: '2026-08-13T00:00:00Z',
+      email: row.email,
+      confirmed_at: row.confirmed_at,
     })
-
-    const [url, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(url).toBe('https://api.talentprotocol.com/data_transfer_opt_outs/confirm')
-    expect(init.method).toBe('POST')
-    expect(init.headers['X-API-KEY']).toBe('sekret')
-    expect(JSON.parse(init.body)).toEqual({ token: 'tok123' })
+    expect(confirmOptOut).not.toHaveBeenCalled()
   })
 
-  it('relays a 422 status and body verbatim', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    vi.stubGlobal('fetch', upstreamJson(422, { error: 'token is invalid or expired' }))
+  it('confirms a fresh row and returns its new confirmed_at', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    const row = optOutRow({ confirmed_at: null })
+    vi.mocked(getOptOutByDigest).mockResolvedValue(row)
+    const confirmed: OptOutRow = { ...row, confirmed_at: '2026-08-14T00:00:00.000Z' }
+    vi.mocked(confirmOptOut).mockResolvedValue(confirmed)
 
-    const response = await confirmPost(
-      postJson('http://localhost:3000/api/opt-out/confirm', { token: 'bad-token' }),
-    )
-    expect(response.status).toBe(422)
-    expect(await response.json()).toEqual({ error: 'token is invalid or expired' })
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      success: true,
+      email: confirmed.email,
+      confirmed_at: confirmed.confirmed_at,
+    })
+    expect(confirmOptOut).toHaveBeenCalledTimes(1)
+    expect(confirmOptOut).toHaveBeenCalledWith(row.id, SUPABASE_KEY)
   })
 
-  it('reports 502 without leaking internals when talent-api is unreachable', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('offline')
-      }),
+  it('returns the ORIGINAL confirmed_at for an already-confirmed row without re-confirming', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    const row = optOutRow({ confirmed_at: '2026-08-01T00:00:00.000Z' })
+    vi.mocked(getOptOutByDigest).mockResolvedValue(row)
+
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      success: true,
+      email: row.email,
+      confirmed_at: row.confirmed_at,
+    })
+    expect(confirmOptOut).not.toHaveBeenCalled()
+  })
+
+  it('hashes the token before lookup, never sending the raw token to Supabase', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(null)
+    const rawToken = 'raw-token-value'
+
+    await confirmPost(postJson(CONFIRM_URL, { token: rawToken }))
+
+    expect(getOptOutByDigest).toHaveBeenCalledTimes(1)
+    const [digestArg] = vi.mocked(getOptOutByDigest).mock.calls[0]
+    expect(digestArg).toBe(createHash('sha256').update(rawToken).digest('hex'))
+    expect(digestArg).not.toBe(rawToken)
+  })
+
+  it('reports 502 without leaking internals when the Supabase lookup throws', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockRejectedValue(
+      new Error(`Supabase opt_outs lookup failed: https://x.supabase.co/rest/v1/opt_outs?token_digest=eq.${'a'.repeat(64)}`),
     )
-    const response = await confirmPost(
-      postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }),
-    )
+
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
+
     expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({ error: 'Upstream failure' })
   })
 
-  it('forwards the first x-forwarded-for hop upstream as X-Client-IP', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { success: true, email: 'builder@example.com' })
-    vi.stubGlobal('fetch', spy)
+  it('reports 502 without leaking internals when confirmOptOut throws', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(optOutRow({ confirmed_at: null }))
+    vi.mocked(confirmOptOut).mockRejectedValue(new Error('Supabase opt_outs confirm failed (500)'))
 
-    await confirmPost(
-      postJson(
-        'http://localhost:3000/api/opt-out/confirm',
-        { token: 'tok123' },
-        { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' },
-      ),
-    )
+    const response = await confirmPost(postJson(CONFIRM_URL, { token: 'tok123' }))
 
-    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers['X-Client-IP']).toBe('203.0.113.5')
-  })
-
-  it('omits X-Client-IP when x-forwarded-for is absent (local dev)', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { success: true, email: 'builder@example.com' })
-    vi.stubGlobal('fetch', spy)
-
-    await confirmPost(postJson('http://localhost:3000/api/opt-out/confirm', { token: 'tok123' }))
-
-    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect('X-Client-IP' in init.headers).toBe(false)
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({ error: 'Upstream failure' })
   })
 })
 
 describe('status route', () => {
   it('rejects a missing token with 400', async () => {
-    const response = await statusGet(new Request('http://localhost:3000/api/opt-out/status'))
+    const response = await statusGet(new Request(STATUS_URL))
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: 'token is required' })
+    expect(supabaseSecretKey).not.toHaveBeenCalled()
   })
 
-  it('reports 503 when TALENT_API_KEY is unset', async () => {
-    vi.stubEnv('TALENT_API_KEY', '')
-    const spy = vi.fn()
-    vi.stubGlobal('fetch', spy)
-    const response = await statusGet(
-      new Request('http://localhost:3000/api/opt-out/status?token=tok123'),
-    )
+  it("reports 503 when Supabase isn't configured", async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(null)
+
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
+
     expect(response.status).toBe(503)
-    expect(spy).not.toHaveBeenCalled()
+    expect(await response.json()).toEqual({ error: "Opt-out isn't configured on this deployment" })
+    expect(getOptOutByDigest).not.toHaveBeenCalled()
   })
 
-  it('forwards to talent-api with the X-API-KEY header and relays a 200 verbatim', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: false })
-    vi.stubGlobal('fetch', spy)
+  it('reports 422 when no row matches the token digest', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(null)
 
-    const response = await statusGet(
-      new Request('http://localhost:3000/api/opt-out/status?token=tok123'),
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({ error: 'Invalid or expired link' })
+  })
+
+  it('reports 422 for an expired, unconfirmed row', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(
+      optOutRow({ expires_at: new Date(Date.now() - 1_000).toISOString(), confirmed_at: null }),
     )
+
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({ error: 'Invalid or expired link' })
+  })
+
+  it('returns 200 for an expired row that is already confirmed (confirmed-before-expired)', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    const row = optOutRow({
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+      confirmed_at: '2026-08-01T00:00:00.000Z',
+    })
+    vi.mocked(getOptOutByDigest).mockResolvedValue(row)
+
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ email: 'builder@example.com', confirmed: false })
-
-    const [url, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(url).toBe('https://api.talentprotocol.com/data_transfer_opt_outs/status?token=tok123')
-    expect(init.headers['X-API-KEY']).toBe('sekret')
+    expect(await response.json()).toEqual({ email: row.email, confirmed: true })
   })
 
-  it('URL-encodes the token when forwarding', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: true })
-    vi.stubGlobal('fetch', spy)
+  it('returns confirmed:false for a fresh, unconfirmed row', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    const row = optOutRow({ confirmed_at: null })
+    vi.mocked(getOptOutByDigest).mockResolvedValue(row)
 
-    await statusGet(
-      new Request(
-        `http://localhost:3000/api/opt-out/status?token=${encodeURIComponent('tok with space')}`,
-      ),
-    )
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
 
-    const [url] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(url).toBe('https://api.talentprotocol.com/data_transfer_opt_outs/status?token=tok%20with%20space')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ email: row.email, confirmed: false })
   })
 
-  it('relays a 422 status and body verbatim', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    vi.stubGlobal('fetch', upstreamJson(422, { error: 'token is invalid' }))
+  it('hashes the token before lookup, never sending the raw token to Supabase', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(null)
+    const rawToken = 'tok with space'
 
-    const response = await statusGet(
-      new Request('http://localhost:3000/api/opt-out/status?token=bad-token'),
-    )
-    expect(response.status).toBe(422)
-    expect(await response.json()).toEqual({ error: 'token is invalid' })
+    await statusGet(new Request(`${STATUS_URL}?token=${encodeURIComponent(rawToken)}`))
+
+    expect(getOptOutByDigest).toHaveBeenCalledTimes(1)
+    const [digestArg] = vi.mocked(getOptOutByDigest).mock.calls[0]
+    expect(digestArg).toBe(createHash('sha256').update(rawToken).digest('hex'))
+    expect(digestArg).not.toBe(rawToken)
   })
 
-  it('reports 502 without leaking internals when talent-api is unreachable', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('offline')
-      }),
+  it('never calls a mutating function — GET is read-only', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockResolvedValue(optOutRow({ confirmed_at: null }))
+
+    await statusGet(new Request(`${STATUS_URL}?token=tok123`))
+
+    expect(confirmOptOut).not.toHaveBeenCalled()
+    expect(insertOptOut).not.toHaveBeenCalled()
+    expect(updateOptOut).not.toHaveBeenCalled()
+  })
+
+  it('reports 502 without leaking internals when the Supabase lookup throws', async () => {
+    vi.mocked(supabaseSecretKey).mockReturnValue(SUPABASE_KEY)
+    vi.mocked(getOptOutByDigest).mockRejectedValue(
+      new Error(`Supabase opt_outs lookup failed: https://x.supabase.co/rest/v1/opt_outs?token_digest=eq.${'a'.repeat(64)}`),
     )
-    const response = await statusGet(
-      new Request('http://localhost:3000/api/opt-out/status?token=tok123'),
-    )
+
+    const response = await statusGet(new Request(`${STATUS_URL}?token=tok123`))
+
     expect(response.status).toBe(502)
-  })
-
-  it('forwards the first x-forwarded-for hop upstream as X-Client-IP', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: false })
-    vi.stubGlobal('fetch', spy)
-
-    await statusGet(
-      new Request('http://localhost:3000/api/opt-out/status?token=tok123', {
-        headers: { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' },
-      }),
-    )
-
-    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers['X-Client-IP']).toBe('203.0.113.5')
-  })
-
-  it('omits X-Client-IP when x-forwarded-for is absent (local dev)', async () => {
-    vi.stubEnv('TALENT_API_KEY', 'sekret')
-    const spy = upstreamJson(200, { email: 'builder@example.com', confirmed: false })
-    vi.stubGlobal('fetch', spy)
-
-    await statusGet(new Request('http://localhost:3000/api/opt-out/status?token=tok123'))
-
-    const [, init] = (spy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect('X-Client-IP' in init.headers).toBe(false)
+    expect(await response.json()).toEqual({ error: 'Upstream failure' })
   })
 })

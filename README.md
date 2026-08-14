@@ -440,12 +440,11 @@ better flow; GitHub offers no secretless redirect.
 ## Data-transfer opt-out (temporary)
 
 One exception to "no backend, no database of people, zero server-side state" above: while
-Talent Protocol winds down, three routes under `/api/opt-out/*` proxy the data-transfer
-opt-out flow to the legacy talent-api, which already implements it. They exist only because
-every talent-api request needs a server-side `TALENT_API_KEY` that must never reach the
-browser — the routes forward the submitted email or token straight through and store
-nothing here. See `src/lib/talent-api.ts` and the `TALENT_API_KEY` / `TALENT_API_URL`
-entries in `.env.example`.
+Talent Protocol winds down, three routes under `/api/opt-out/*` implement the data-transfer
+opt-out flow. They read/write a dedicated Supabase database (records export + opt-out table)
+and send one confirmation email via SendGrid; nothing else is stored server-side. See
+`src/lib/supabase-admin.ts`, `src/lib/sendgrid.ts`, and the `SUPABASE_URL` / `SUPABASE_SECRET_KEY`
+/ `SENDGRID_API_KEY` entries in `.env.example`.
 
 ## Ground rules
 

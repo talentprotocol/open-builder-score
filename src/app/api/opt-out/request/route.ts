@@ -59,8 +59,8 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Invalid email format' }, { status: 422 })
   }
 
-  const origin = new URL(request.url).origin
-  const work = mintAndSend(normalized, supabaseKey, sendgridKey, origin).catch(() => success())
+  const requestUrl = request.url
+  const work = mintAndSend(normalized, supabaseKey, sendgridKey, requestUrl).catch(() => success())
   return withDeadline(work, REQUEST_DEADLINE_MS)
 }
 
@@ -68,8 +68,9 @@ async function mintAndSend(
   normalized: string,
   supabaseKey: string,
   sendgridKey: string,
-  origin: string,
+  requestUrl: string,
 ): Promise<Response> {
+  const origin = new URL(requestUrl).origin
   const record = await findRecordNameByEmail(normalized, supabaseKey)
   if (!record) return success()
 
