@@ -1,52 +1,86 @@
-import { talentApiKey, talentApiUrl, visitorIp } from '@/lib/talent-api'
+import { createHash, randomBytes } from 'node:crypto'
+import { isLikelyEmail } from '@/lib/opt-out'
+import {
+  supabaseSecretKey,
+  findRecordNameByEmail,
+  getOptOutByEmail,
+  insertOptOut,
+  updateOptOut,
+} from '@/lib/supabase-admin'
+import { sendgridApiKey, sendOptOutConfirmationEmail } from '@/lib/sendgrid'
+import { dataOptOutConfirmPath } from '@/lib/routes'
 
-const UPSTREAM_TIMEOUT_MS = 10_000
+const SUCCESS_BODY = '{"success":true}'
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000
 
-// Step 1 of the opt-out flow: the visitor submits an email and talent-api
-// sends a confirmation link if (and only if) it matches an account. The
-// upstream 200 body is deliberately identical whether or not the email
-// matched — an anti-enumeration measure — so this proxy relays it verbatim
-// and must never attach anything that would let a caller tell the two cases
-// apart.
+// Step 1 of the opt-out flow: the visitor submits an email; if it matches a
+// record from the export, this mints a confirmation token (stored only as
+// its SHA-256 digest) and emails the confirm link via SendGrid.
+//
+// The response is deliberately identical — `SUCCESS_BODY`, byte for byte —
+// whether the email matched, missed, is on cooldown, is already confirmed,
+// lost the insert race to a concurrent request, or the send itself failed.
+// That is the anti-enumeration property this route exists to protect, so
+// nothing past the format check may change the status or body. For the same
+// reason a caught error is never logged or echoed: its message can carry the
+// upstream PostgREST request URL, which embeds the email address.
 export async function POST(request: Request): Promise<Response> {
-  let email = ''
+  let email: unknown
   try {
     const body = (await request.json()) as Record<string, unknown> | null
-    email = typeof body?.email === 'string' ? body.email.trim() : ''
+    email = body?.email
   } catch {
-    email = ''
+    return Response.json({ error: 'email is required' }, { status: 400 })
   }
-  if (!email) {
+  if (typeof email !== 'string' || email.trim() === '') {
     return Response.json({ error: 'email is required' }, { status: 400 })
   }
 
-  const apiKey = talentApiKey()
-  if (apiKey === null) {
+  const supabaseKey = supabaseSecretKey()
+  const sendgridKey = sendgridApiKey()
+  if (supabaseKey === null || sendgridKey === null) {
     return Response.json({ error: "Opt-out isn't configured on this deployment" }, { status: 503 })
   }
 
-  const headers: Record<string, string> = { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' }
-  const ip = visitorIp(request)
-  if (ip !== null) headers['X-Client-IP'] = ip
-
-  let response: Response
-  try {
-    response = await fetch(`${talentApiUrl()}/data_transfer_opt_outs`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ email }),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    })
-  } catch {
-    return Response.json({ error: 'talent-api is unreachable' }, { status: 502 })
+  const normalized = email.trim().toLowerCase()
+  if (!isLikelyEmail(normalized)) {
+    return Response.json({ error: 'Invalid email format' }, { status: 422 })
   }
 
-  let payload: unknown
   try {
-    payload = await response.json()
-  } catch {
-    return Response.json({ error: 'talent-api returned an unexpected response' }, { status: 502 })
-  }
+    const record = await findRecordNameByEmail(normalized, supabaseKey)
+    if (!record) return success()
 
-  return Response.json(payload, { status: response.status })
+    const existing = await getOptOutByEmail(normalized, supabaseKey)
+    if (existing?.confirmed_at) return success()
+    if (existing?.last_sent_at && Date.now() - Date.parse(existing.last_sent_at) < RESEND_COOLDOWN_MS) {
+      return success()
+    }
+
+    const token = randomBytes(32).toString('hex')
+    const fields = {
+      token_digest: createHash('sha256').update(token).digest('hex'),
+      expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+      last_sent_at: new Date().toISOString(),
+    }
+
+    if (existing) {
+      await updateOptOut(existing.id, fields, supabaseKey)
+    } else if ((await insertOptOut({ email: normalized, ...fields }, supabaseKey)) === 'conflict') {
+      // Double-submit race: another request already owns this email's row
+      // and will send its own confirmation email.
+      return success()
+    }
+
+    const confirmUrl = new URL(dataOptOutConfirmPath(token), new URL(request.url).origin).toString()
+    await sendOptOutConfirmationEmail({ to: normalized, firstName: record.name, confirmUrl }, sendgridKey)
+    return success()
+  } catch {
+    return success()
+  }
+}
+
+function success(): Response {
+  return new Response(SUCCESS_BODY, { status: 200, headers: { 'content-type': 'application/json' } })
 }
