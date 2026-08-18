@@ -10,13 +10,8 @@ import {
   useSwitchChain,
   useWalletClient,
 } from 'wagmi'
-import {
-  attestAggregateScore,
-  attestScore,
-  ATTEST_CHAIN_ID,
-  EASSCAN_SITE,
-  AGGREGATE_PREFLIGHT_ERRORS,
-} from '@/lib/eas'
+import { ATTEST_CHAIN_ID, EASSCAN_SITE, AGGREGATE_PREFLIGHT_ERRORS } from '@/lib/eas'
+import { WalletProviders } from '@/components/wallet/wallet-providers'
 import {
   canonicalExtraWallets,
   ownershipTypedData,
@@ -47,7 +42,18 @@ const EXPLORER_BASE = `${EASSCAN_SITE}/attestation/view/`
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 
-export function AttestPanel({ scored }: { scored: Scored }) {
+// Loaded lazily by the score results page (next/dynamic, ssr: false) and
+// self-wrapped in WalletProviders: the wagmi/RainbowKit stack ships in this
+// chunk instead of every page's first load.
+export default function AttestPanel({ scored }: { scored: Scored }) {
+  return (
+    <WalletProviders>
+      <AttestPanelInner scored={scored} />
+    </WalletProviders>
+  )
+}
+
+function AttestPanelInner({ scored }: { scored: Scored }) {
   const { address: connected, chainId } = useAccount()
   const { disconnectAsync } = useDisconnect()
   const { openConnectModal } = useConnectModal()
@@ -296,6 +302,9 @@ export function AttestPanel({ scored }: { scored: Scored }) {
         computedAt,
         blockNumber: scored.gather.baseBlockNumber!,
       }
+      // The EAS SDK + ethers load here, on the click that needs them —
+      // they are the heaviest dependencies in the app and nothing else uses them.
+      const { attestScore, attestAggregateScore } = await import('@/lib/eas-attest')
       const uid = isAggregate
         ? await attestAggregateScore({
             ...common,
