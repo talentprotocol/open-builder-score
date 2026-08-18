@@ -305,6 +305,21 @@ const aggregateAttestation = (overrides: Partial<OnchainAttestation> = {}): Onch
 })
 
 // v3: adds the recipient proof slot and the shared proofs_issued_at anchor.
+// v3 solo: the N=1 set — no extras, no proofs, msg.sender is the proof.
+const dataV3Solo = encodeAggregateAttestationData({
+  specVersion: spec.version,
+  wallet: WALLET,
+  extraWallets: [],
+  ownershipProofs: [],
+  recipientProof: '0x' as `0x${string}`,
+  proofsIssuedAt: 0,
+  githubHandle: null,
+  score: 103,
+  computedAt: 1784975866,
+  blockNumber: 49093260n,
+  badges: [],
+})
+
 const dataV3 = encodeAggregateAttestationData({
   specVersion: spec.version,
   wallet: WALLET,
@@ -366,8 +381,14 @@ describe('validateAttestation — aggregate structure', () => {
     expect(problemsFor({ ownershipProofs: [`0x${'11'.repeat(65)}`] }).join(' ')).toMatch(/proof/i)
   })
 
-  it('rejects an aggregate carrying no extra wallets', () => {
+  it('rejects a pre-v3 aggregate carrying no extra wallets', () => {
+    // The verify-url era required a non-empty set; only v3 has the solo form.
     expect(problemsFor({ extraWallets: [], ownershipProofs: [] }).join(' ')).toMatch(/extra wallet/i)
+  })
+
+  it('accepts a v3 solo attestation — the N=1 set', () => {
+    const att = aggregateAttestation({ schemaId: ATTEST_AGGREGATE_SCHEMA_UID, data: dataV3Solo })
+    expect(validateAttestation(att, decodeAttestationData(att.data, att.schemaId))).toEqual([])
   })
 
   it('rejects extras that are not strictly ascending, which also catches duplicates', () => {
@@ -489,11 +510,30 @@ describe('isAttesterInSet', () => {
 // both the recomputed and the not-comparable verify paths share.
 describe('verifyAttestationOwnership', () => {
   const io = { verifyContractSignature: async () => false }
+  const decoded = (att: OnchainAttestation) => decodeAttestationData(att.data, att.schemaId)!
 
-  it('has nothing to check for a single-wallet attestation', async () => {
+  it('has nothing to check for a legacy single-schema attestation', async () => {
     const att = attestation()
     const decoded = decodeAttestationData(att.data, att.schemaId)!
     expect(await verifyAttestationOwnership(att, decoded, io)).toEqual([])
+  })
+
+  it('a v3 solo record self-attested by its recipient proves by sending', async () => {
+    const att = aggregateAttestation({ schemaId: ATTEST_AGGREGATE_SCHEMA_UID, data: dataV3Solo })
+    const checks = await verifyAttestationOwnership(att, decoded(att), io)
+    expect(checks.map((c) => c.status)).toEqual(['attester'])
+  })
+
+  it('a v3 solo record sent by an outsider fails — the empty set proves nothing', async () => {
+    // The spoof this closes: without the recipient-slot check, anyone could
+    // mint an empty-set record for any wallet and have it read as verified.
+    const att = aggregateAttestation({
+      schemaId: ATTEST_AGGREGATE_SCHEMA_UID,
+      data: dataV3Solo,
+      attester: '0x000000000000000000000000000000000000dEaD',
+    })
+    const checks = await verifyAttestationOwnership(att, decoded(att), io)
+    expect(checks.map((c) => c.status)).toEqual(['missing'])
   })
 
   it('checks the full v3 set, recipient included, with the attester exempt', async () => {

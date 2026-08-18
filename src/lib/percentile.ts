@@ -1,5 +1,5 @@
 import specJson from '../../spec/spec.json'
-import { ATTEST_SCHEMA_UID } from './eas'
+import { ATTEST_AGGREGATE_SCHEMA_UID } from './eas'
 import { decodeAttestationData, EASSCAN_GRAPHQL } from './verify'
 import type { Spec } from './types'
 
@@ -48,11 +48,13 @@ export function parseCorpusPage(raw: unknown): CorpusEntry[] | null {
     if (typeof item !== 'object' || item === null) continue
     const a = item as Record<string, unknown>
     if (typeof a.recipient !== 'string' || typeof a.data !== 'string') continue
-    // v1 only, and the corpus query filters to v1: mixing 1-wallet and 5-wallet
-    // totals is not like-for-like, and latestPerWallet keys on recipient, so an
-    // aggregate would silently displace the recipient's single-wallet score.
-    const decoded = decodeAttestationData(a.data as `0x${string}`, ATTEST_SCHEMA_UID)
-    if (decoded === null) continue
+    // Solo records only: mixing 1-wallet and 5-wallet totals is not
+    // like-for-like, and latestPerWallet keys on recipient, so a multi-wallet
+    // aggregate would silently displace the recipient's solo score. Since the
+    // schema consolidation (2026-08-18) solo attestations are N=1 aggregates,
+    // so the corpus lives on the aggregate schema and filters on set size.
+    const decoded = decodeAttestationData(a.data as `0x${string}`, ATTEST_AGGREGATE_SCHEMA_UID)
+    if (decoded === null || decoded.extraWallets.length > 0) continue
     const timeCreated = Number(a.timeCreated ?? 0)
     if (!Number.isFinite(timeCreated)) continue
     entries.push({
@@ -130,7 +132,7 @@ export async function fetchScorePercentile(
   for (; page < CORPUS_MAX_PAGES; page++) {
     const raw = await postQuery(
       CORPUS_PAGE_QUERY,
-      { schema_id: ATTEST_SCHEMA_UID, take: CORPUS_PAGE_SIZE, skip: page * CORPUS_PAGE_SIZE },
+      { schema_id: ATTEST_AGGREGATE_SCHEMA_UID, take: CORPUS_PAGE_SIZE, skip: page * CORPUS_PAGE_SIZE },
       fetchFn,
     )
     if (raw === null) return { status: 'error' }
@@ -143,7 +145,7 @@ export async function fetchScorePercentile(
   if (truncated) {
     // The cheap server-side count makes the truncation note honest; if the
     // count itself fails, keep the pessimistic flag.
-    const raw = await postQuery(CORPUS_COUNT_QUERY, { schema_id: ATTEST_SCHEMA_UID }, fetchFn)
+    const raw = await postQuery(CORPUS_COUNT_QUERY, { schema_id: ATTEST_AGGREGATE_SCHEMA_UID }, fetchFn)
     const count = (
       raw as { data?: { aggregateAttestation?: { _count?: { _all?: unknown } } } } | null
     )?.data?.aggregateAttestation?._count?._all

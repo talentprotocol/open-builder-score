@@ -59,7 +59,7 @@ describe('ownershipTypedData', () => {
     expect(digest({ ...base, recipient: A })).not.toBe(baseline)
     expect(digest({ ...base, extras: [A] })).not.toBe(baseline)
     expect(digest({ ...base, issuedAt: ISSUED_AT + 1 })).not.toBe(baseline)
-    expect(digest({ ...base, chainId: 8453 })).not.toBe(baseline)
+    expect(digest({ ...base, chainId: 84532 })).not.toBe(baseline)
   })
 
   it('is a different message family from the legacy payload', () => {
@@ -250,7 +250,9 @@ describe('verifyOwnershipProofs (v2, attester-exempt)', () => {
 })
 
 describe('legacyOwnershipTypedData golden vector', () => {
-  // The v1 pin, unchanged: old attestations must keep verifying forever.
+  // The v1 pin, unchanged: old attestations must keep verifying forever. Every
+  // v1 proof was signed on Base Sepolia, so the domain is pinned to 84532
+  // explicitly — the app's default moved to Base mainnet on 2026-08-18.
   it('hashes the fixed v1 tuple to the original pinned digest', () => {
     expect(
       hashTypedData(
@@ -259,6 +261,7 @@ describe('legacyOwnershipTypedData golden vector', () => {
           wallet: EXTRAS[0],
           extras: EXTRAS,
           computedAt: ISSUED_AT,
+          chainId: 84532,
         }),
       ),
     ).toBe('0xdc72c7e691a7d9f139bf4f3df6c220a2ca687119b6f99e51fd1c7fbbc2976a3c')
@@ -268,10 +271,12 @@ describe('legacyOwnershipTypedData golden vector', () => {
 describe('ownershipTypedData golden vector', () => {
   // Regenerate only when the proof format changes deliberately — and when it
   // does, the schema UID must change with it, because old proofs stop verifying.
+  // Re-pinned 2026-08-18 for the Base mainnet domain (chainId 8453); the prior
+  // pin (0xe7ed6c8c…) was the same tuple under Base Sepolia's 84532.
   it('hashes a fixed tuple to a pinned digest', () => {
     expect(
       digest({ recipient: PRIMARY, wallet: EXTRAS[0], extras: EXTRAS, issuedAt: ISSUED_AT }),
-    ).toBe('0xe7ed6c8c537dab5a75fa2f3613404cfb947bf57d7702e324b8edcc904e6db25f')
+    ).toBe('0x2d33b35121064e64a83233c7f8933b8a886cc437ae66c9c7423ff4aab41b0a47')
   })
 })
 

@@ -22,7 +22,7 @@ describe('schema UID', () => {
     expect(uid).toBe(ATTEST_SCHEMA_UID)
   })
 
-  it('matches the schema registered on Base Sepolia (schema #2265, 2026-07-25)', () => {
+  it('matches the registered schema (Base Sepolia #2265 2026-07-25; Base mainnet 2026-08-18)', () => {
     // Golden pin: verified on-chain against SchemaRegistry.getSchema — a change to
     // ATTEST_SCHEMA or computeSchemaUid that breaks this line breaks attestation.
     expect(ATTEST_SCHEMA_UID).toBe(
@@ -54,7 +54,7 @@ describe('aggregate schema UID', () => {
     expect(uid).toBe(ATTEST_AGGREGATE_SCHEMA_UID)
   })
 
-  it('matches the schema registered on Base Sepolia (schema #2308, 2026-08-05)', () => {
+  it('matches the registered schema (Base Sepolia #2308 2026-08-05; Base mainnet 2026-08-18)', () => {
     // Golden pin: verified on-chain against the Registered event and easscan
     // (tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76).
     expect(ATTEST_AGGREGATE_SCHEMA_UID).toBe(
@@ -147,10 +147,17 @@ describe('encodeAggregateAttestationData', () => {
     ).toThrow(/proof/i)
   })
 
-  it('refuses to encode an aggregate with no extra wallets', () => {
-    expect(() =>
-      encodeAggregateAttestationData({ ...params, extraWallets: [], ownershipProofs: [] }),
-    ).toThrow(/extra wallet/i)
+  it('encodes a solo attestation — the N=1 set with no extras and no proofs', () => {
+    const data = encodeAggregateAttestationData({
+      ...params,
+      extraWallets: [],
+      ownershipProofs: [],
+      recipientProof: '0x',
+    })
+    const decoded = decodeAbiParameters(parseAbiParameters(ATTEST_AGGREGATE_SCHEMA), data)
+    expect(decoded[2]).toEqual([]) // extra_wallets
+    expect(decoded[3]).toEqual([]) // ownership_proofs
+    expect(decoded[4]).toBe('0x') // recipient proof: msg.sender is the proof
   })
 
   it('encodes a real recipient proof when an extra is the sender', () => {

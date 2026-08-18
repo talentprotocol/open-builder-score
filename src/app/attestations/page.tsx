@@ -108,7 +108,7 @@ export default function AttestationsPage() {
         <header className="flex flex-col gap-2">
           <h1 className="font-heading text-xl font-normal">Latest attestations</h1>
           <p className="text-base text-muted-foreground">
-            The most recent aggregate Builder Score attestations on Base Sepolia. Each links to a
+            The most recent aggregate Builder Score attestations on Base. Each links to a
             full in-browser verification.
           </p>
         </header>

@@ -29,7 +29,7 @@ describe('describeWalletError', () => {
 
   it('gives the switch action its manual-fallback message', () => {
     expect(describeWalletError(new Error('boom'), 'switch').message).toBe(
-      "Couldn't switch to Base Sepolia — switch manually in your wallet and try again.",
+      "Couldn't switch to Base — switch manually in your wallet and try again.",
     )
   })
 

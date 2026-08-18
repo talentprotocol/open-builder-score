@@ -6,7 +6,10 @@ import type { WalletClient } from 'viem'
 export const EAS_CONTRACT_ADDRESS = '0x4200000000000000000000000000000000000021' as const
 export const SCHEMA_REGISTRY_ADDRESS = '0x4200000000000000000000000000000000000020' as const
 
-// README-proposed schema. EAS canonical form: comma-separated, no spaces.
+// Legacy since 2026-08-18: every new attestation — solo included — uses
+// ATTEST_AGGREGATE_SCHEMA (a solo score is the N=1 set: no extras, the sender
+// is the recipient and its own proof). Kept for decoding Sepolia-era records.
+// EAS canonical form: comma-separated, no spaces.
 export const ATTEST_SCHEMA =
   'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number'
 
@@ -39,8 +42,10 @@ export const ATTEST_SCHEMA =
 // the shared EIP-712 anchor every signature binds; a forged value makes every
 // proof fail recovery, so it cannot be quietly edited.
 //
-// Registered on Base Sepolia (2026-08-05) as schema #2308, resolver 0x0, revocable.
-// tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76.
+// Registered on Base Sepolia (2026-08-05, schema #2308,
+// tx 0xa8d87dff68fd14d0c7c43c8a0ddd23ed156ce738f6f9a48c6245408ed0831c76) and on
+// Base mainnet (2026-08-18, scripts/register-schemas.mjs); resolver 0x0, revocable.
+// Same UID on both chains — it hashes only (schema, resolver, revocable).
 // Golden-pinned in test/eas.test.ts, verified against SchemaRegistry.getSchema and easscan.
 export const ATTEST_AGGREGATE_SCHEMA =
   'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,bytes recipient_ownership_proof,uint64 proofs_issued_at,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges'
@@ -51,12 +56,13 @@ export const ATTEST_AGGREGATE_SCHEMA_UID = computeSchemaUid(
   true,
 )
 
-export const ATTEST_CHAIN_ID: number = 84532 // Base Sepolia first; switch to 8453 (Base) post-registration
+// Base mainnet. The POC ran on Base Sepolia (84532); both schemas are also
+// registered there, but nothing in the app writes or reads Sepolia anymore.
+export const ATTEST_CHAIN_ID: number = 8453
 
-export const EASSCAN_SITE =
-  ATTEST_CHAIN_ID === 84532
-    ? 'https://base-sepolia.easscan.org'
-    : 'https://base.easscan.org'
+// The POC's Sepolia records live on base-sepolia.easscan.org; this app no
+// longer reads them.
+export const EASSCAN_SITE = 'https://base.easscan.org'
 
 export function computeSchemaUid(
   schema: string,
@@ -130,7 +136,6 @@ export interface AttestParams {
 // of routing them through the generic post-tx wallet-error mapping.
 export const AGGREGATE_PREFLIGHT_ERRORS: readonly string[] = [
   'wallet not connected',
-  'an aggregate attestation needs at least one extra wallet',
   'every extra wallet needs exactly one ownership proof',
   'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
   'exactly one wallet — the one sending the transaction — may rely on msg.sender as its proof',
