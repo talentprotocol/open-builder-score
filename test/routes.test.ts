@@ -7,6 +7,8 @@ import {
   absoluteUrl,
   verifyWalletPath,
   attestationsPath,
+  dataOptOutPath,
+  dataOptOutConfirmPath,
   SITE_ORIGIN,
 } from '@/lib/routes'
 
@@ -91,6 +93,26 @@ describe('extra wallets', () => {
     expect(inputPath('0xabc', null, ['0xdef', '0x123'])).toBe(
       '/score?wallet=0xabc&wallets=0xdef%2C0x123',
     )
+  })
+})
+
+describe('dataOptOutPath', () => {
+  it('is the bare opt-out landing page', () => {
+    expect(dataOptOutPath()).toBe('/data-opt-out')
+  })
+})
+
+describe('dataOptOutConfirmPath', () => {
+  it('builds the token-keyed confirm path', () => {
+    expect(dataOptOutConfirmPath('abc123')).toBe('/data-opt-out/confirm/abc123')
+  })
+
+  it('URL-encodes the token', () => {
+    expect(dataOptOutConfirmPath('a b/c?')).toBe('/data-opt-out/confirm/a%20b%2Fc%3F')
+  })
+
+  it('does not collide with the bare landing page', () => {
+    expect(dataOptOutConfirmPath('x')).not.toBe(dataOptOutPath())
   })
 })
 

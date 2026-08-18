@@ -437,15 +437,27 @@ This replaced an OAuth **device flow**, which needed no secret but asked the use
 code into a second tab — a TV/CLI affordance, not a web one. The secret is the price of the
 better flow; GitHub offers no secretless redirect.
 
+## Data-transfer opt-out (temporary)
+
+One exception to "no backend, no database of people, zero server-side state" above: while
+Talent Protocol winds down, three routes under `/api/opt-out/*` implement the data-transfer
+opt-out flow. They read/write a dedicated Supabase database (records export + opt-out table)
+and send one confirmation email via SendGrid; nothing else is stored server-side. See
+`src/lib/supabase-admin.ts`, `src/lib/sendgrid.ts`, and the `SUPABASE_URL` / `SUPABASE_SECRET_KEY`
+/ `SENDGRID_API_KEY` entries in `.env.example`.
+
 ## Ground rules
 
 - The engine is deterministic: same inputs + same `spec.json` version → same score, always.
 - `spec.json` is versioned; any weight/credential change bumps the version. Attestations
   carry the version they were computed with.
-- Zero secrets **in the repo** and zero server-side state. `GITHUB_CLIENT_SECRET` is the
-  single exception, and it stays an environment variable read only by server code — GitHub
-  has no PKCE, so a redirect sign-in cannot be done without one. Everything that computes a
-  score still runs in the browser against public endpoints with no keys.
+- Zero secrets **in the repo**. `GITHUB_CLIENT_SECRET` is a server-only environment variable
+  read only by server code — GitHub has no PKCE, so a redirect sign-in cannot be done without
+  one — and everything that computes a score still runs in the browser against public
+  endpoints with no keys. The temporary data-transfer opt-out flow (see above) is the
+  exception to "zero server-side state": `SUPABASE_SECRET_KEY` and `SENDGRID_API_KEY` are two
+  more server-only secrets, and the opt-out records described above are real server-side
+  state — the app stores nothing else server-side.
 - **Wallet ownership is proved by the attestation.** Anyone may score any address — that's
   the point of an open score — but attesting requires the connected wallet to *be* the scored
   wallet. EAS records the attester as `msg.sender`, so the transaction itself is the proof

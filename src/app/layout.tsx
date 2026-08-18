@@ -3,8 +3,7 @@ import { SITE_ORIGIN } from "@/lib/routes";
 import { Cal_Sans, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Header } from "@/components/header";
-import { Footer } from "@/components/footer";
+import { SiteChrome } from "@/components/site-chrome";
 
 const calSans = Cal_Sans({
   variable: "--font-cal-sans",
@@ -45,12 +44,9 @@ export default function RootLayout({
     >
       <body className="flex min-h-dvh flex-col blueprint-grid">
         <Providers>
-          {/* Flex shell so main flex-1 pushes the footer to the viewport bottom. */}
-          <div className="flex min-h-dvh flex-1 flex-col">
-            <Header />
-            {children}
-            <Footer />
-          </div>
+          {/* SiteChrome decides Header/Footer vs. the bare opt-out shell;
+              see its comment for why that has to happen per-route here. */}
+          <SiteChrome>{children}</SiteChrome>
         </Providers>
       </body>
     </html>
