@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@phosphor-icons/react/dist/ssr'
 import { ATTEST_SCHEMA_UID, EASSCAN_SITE } from '@/lib/eas'
-import { attestationsPath, badgesPath, credentialsPath, verifyPath } from '@/lib/routes'
+import { attestationsPath, badgesPath, credentialsPath, privacyPath, termsPath, verifyPath } from '@/lib/routes'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -42,6 +42,12 @@ export function Footer() {
             </Link>
             <Link href={attestationsPath()} className={productLinkClass}>
               Attestations
+            </Link>
+            <Link href={termsPath()} className={externalLinkClass}>
+              Terms
+            </Link>
+            <Link href={privacyPath()} className={externalLinkClass}>
+              Privacy
             </Link>
           </nav>
 

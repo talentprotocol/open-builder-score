@@ -80,3 +80,11 @@ export function dataOptOutPath(): string {
 export function dataOptOutConfirmPath(token: string): string {
   return `/data-opt-out/confirm/${encodeURIComponent(token)}`
 }
+
+export function termsPath(): string {
+  return '/terms'
+}
+
+export function privacyPath(): string {
+  return '/privacy'
+}
