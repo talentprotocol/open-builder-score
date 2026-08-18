@@ -374,7 +374,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
                 <PingDot settled={false} /> Switching…
               </span>
             ) : (
-              'Switch to Base Sepolia'
+              'Switch to Base'
             )}
           </Button>
         )}
@@ -400,7 +400,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
           </p>
           {!onAttestChain && connected && (
             <p className="text-sm text-warning-text">
-              Switch to Base Sepolia first — a wallet won&apos;t sign a message for a network it
+              Switch to Base first — a wallet won&apos;t sign a message for a network it
               isn&apos;t on.
             </p>
           )}

@@ -10,7 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import { useTheme } from 'next-themes'
-import { base, baseSepolia } from 'wagmi/chains'
+import { base } from 'wagmi/chains'
 import { useMounted } from '@/components/use-mounted'
 import { WALLETCONNECT_PROJECT_ID } from '@/lib/wallet'
 
@@ -22,7 +22,7 @@ import { WALLETCONNECT_PROJECT_ID } from '@/lib/wallet'
 const config = getDefaultConfig({
   appName: 'Open Builder Score',
   projectId: WALLETCONNECT_PROJECT_ID,
-  chains: [baseSepolia, base],
+  chains: [base],
   // Islands mount client-only (next/dynamic, ssr: false), so there is no
   // server pass to keep hydration-consistent with; false lets wagmi restore
   // the persisted connection on first render instead of after a mount effect.

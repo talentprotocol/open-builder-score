@@ -5,7 +5,8 @@ Builder Score computed **entirely in the browser** from public data — badges a
 holdings via RPC, GitHub via its public API — with an optional one-click EAS attestation
 on Base. No backend, no database of people, no accounts.
 
-**Live at [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app)** (Base Sepolia attestations while in POC).
+**Live at [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app)** — attestations on **Base mainnet**
+(registered 2026-08-18 via `scripts/register-schemas.mjs`; the POC ran on Base Sepolia, whose records this app no longer reads).
 
 Context docs (internal):
 
@@ -175,7 +176,8 @@ fine for self-checks. Handle 403 rate-limit responses with a friendly message.
       `keccak256(schema ++ zero resolver ++ revocable)`, golden-pinned in `test/eas.test.ts`).
       Schema: `string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number`.
       E2E verified 2026-07-25 incl. the wrong-network switch path. Base mainnet registration
-      deferred until after Sepolia validation (flip `ATTEST_CHAIN_ID` in `src/lib/eas.ts`).
+      done 2026-08-18: `ATTEST_CHAIN_ID` is 8453 (Base mainnet); both schemas keep their
+      Sepolia UIDs since a schema UID hashes only (schema, resolver, revocable).
 - [x] **8. Deploy** — Vercel ✅ 2026-07-25: [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app).
       The only server-side code is the three GitHub OAuth routes (`/api/github/*`), which
       hold no state; `GITHUB_CLIENT_SECRET` is set in the Vercel project, never committed. Deployed via `vercel deploy --prod` from local `main`

@@ -6,7 +6,7 @@ import {
   type Chain,
   type PublicClient,
 } from 'viem'
-import { arbitrum, base, baseSepolia, celo, mainnet, optimism, polygon } from 'viem/chains'
+import { arbitrum, base, celo, mainnet, optimism, polygon } from 'viem/chains'
 import registryJson from '../../spec/badge-registry.json'
 import type { CredentialInput, Registry } from './types'
 
@@ -46,7 +46,6 @@ export const CHAIN_CONFIG: Record<number, { chain: Chain; rpcUrls: string[] }> =
   137: { chain: polygon, rpcUrls: ['https://polygon-rpc.com', 'https://polygon-bor-rpc.publicnode.com', 'https://1rpc.io/matic', 'https://polygon.drpc.org'] },
   42161: { chain: arbitrum, rpcUrls: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com', 'https://1rpc.io/arb', 'https://arbitrum.drpc.org'] },
   8453: { chain: base, rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://1rpc.io/base', 'https://base.drpc.org'] },
-  84532: { chain: baseSepolia, rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com', 'https://base-sepolia.drpc.org'] },
   42220: { chain: celo, rpcUrls: ['https://forno.celo.org', 'https://celo.drpc.org', 'https://rpc.ankr.com/celo'] },
 }
 

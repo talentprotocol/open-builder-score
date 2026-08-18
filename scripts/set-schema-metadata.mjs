@@ -5,7 +5,10 @@
 //   node --env-file=.env scripts/set-schema-metadata.mjs          # preflight
 //   node --env-file=.env scripts/set-schema-metadata.mjs --send   # attest
 //
-// Defaults to the aggregate schema only. Add --include-single for #2265.
+// Covers both schemas (single + aggregate). Targets Base mainnet, where both
+// were registered by our own wallet — so easscan indexes the metadata with
+// isCreator: true. (On Sepolia the single schema's registration was relayed
+// by a gas station, which is why it used to be opt-in there.)
 //
 // Note easscan renders both fields as PLAIN TEXT — no markdown, no
 // autolinking (verified against a schema whose description contains markdown,
@@ -16,7 +19,7 @@
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, encodeAbiParameters, formatEther, http, parseAbi, parseAbiParameters } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
+import { base } from 'viem/chains'
 
 const EAS = '0x4200000000000000000000000000000000000021'
 const NAME_SCHEMA = '0x44d562ac1d7cd77e232978687fea027ace48f719cf1d58c7888e509663bb87fc'
@@ -37,10 +40,6 @@ function siteOrigin() {
 
 const ORIGIN = siteOrigin()
 
-// #2265 is opt-in via --include-single: easscan recorded its creator as the
-// MetaMask gas-station wallet that relayed the registration, not the registerer,
-// so metadata from us is indexed but flagged isCreator: false. Kept here so it
-// can be sent deliberately rather than rediscovered.
 const ALL_ENTRIES = [
   {
     uid: AGGREGATE_UID,
@@ -80,8 +79,7 @@ const EAS_ABI = parseAbi([
 ])
 
 const send = process.argv.includes('--send')
-const includeSingle = process.argv.includes('--include-single')
-const ENTRIES = ALL_ENTRIES.filter((e) => includeSingle || e.uid === AGGREGATE_UID)
+const ENTRIES = ALL_ENTRIES
 const key = process.env.ATTESTATION_WALLET_KEY
 if (!key) {
   console.error('ATTESTATION_WALLET_KEY is not set. Run with: node --env-file=.env ' + process.argv[1])
@@ -89,7 +87,7 @@ if (!key) {
 }
 
 const account = privateKeyToAccount(key.startsWith('0x') ? key : `0x${key}`)
-const publicClient = createPublicClient({ chain: baseSepolia, transport: http() })
+const publicClient = createPublicClient({ chain: base, transport: http() })
 
 console.log('origin:  ', ORIGIN, '(from src/lib/routes.ts)')
 console.log('attester:', account.address)
@@ -107,7 +105,7 @@ if (!send) {
   process.exit(0)
 }
 
-const walletClient = createWalletClient({ account, chain: baseSepolia, transport: http() })
+const walletClient = createWalletClient({ account, chain: base, transport: http() })
 
 const attest = async (schema, data, label) => {
   const hash = await walletClient.writeContract({
@@ -148,4 +146,4 @@ for (const e of ENTRIES) {
 }
 
 console.log('\n✓ done')
-for (const e of ENTRIES) console.log(`  https://base-sepolia.easscan.org/schema/view/${e.uid}`)
+for (const e of ENTRIES) console.log(`  https://base.easscan.org/schema/view/${e.uid}`)

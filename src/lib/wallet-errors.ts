@@ -13,7 +13,7 @@ export interface WalletErrorInfo {
 
 const FAILURE_MESSAGE: Record<WalletAction, string> = {
   connect: "Couldn't open the wallet connection — try again.",
-  switch: "Couldn't switch to Base Sepolia — switch manually in your wallet and try again.",
+  switch: "Couldn't switch to Base — switch manually in your wallet and try again.",
   sign: "Couldn't get a signature from the wallet — try again.",
   attest: 'The attestation failed onchain. Nothing was spent besides gas. Try again.',
 }
