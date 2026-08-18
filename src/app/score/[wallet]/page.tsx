@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { isAddress } from 'viem'
 import specJson from '../../../../spec/spec.json'
 import { computeScore } from '@/lib/engine'
@@ -17,7 +18,6 @@ import { credentialsPath, inputPath, scorePath } from '@/lib/routes'
 import { evaluateBadges, gatherBadges } from '@/lib/badges'
 import { CredentialCard } from '@/components/credential-card'
 import { BadgeStrip } from '@/components/badge-strip'
-import { AttestPanel } from '@/components/attest-panel'
 import { AttestationHistory } from '@/components/attestation-history'
 import { CopyLinkButton } from '@/components/copy-link-button'
 import { ScorePercentile } from '@/components/score-percentile'
@@ -29,6 +29,11 @@ import { PingDot } from '@/components/motion/ping-dot'
 import { SweepOverlay } from '@/components/motion/sweep-overlay'
 
 const spec = specJson as Spec
+
+// The attest panel carries the whole wagmi/RainbowKit stack (self-wrapped in
+// WalletProviders) — lazy and client-only so none of it is in the page's
+// first load; it streams in while the visitor reads their score.
+const AttestPanel = dynamic(() => import('@/components/attest-panel'), { ssr: false })
 
 // 'badges' is not a GatherSource: badges are gathered outside the scoring
 // pipeline so the verify screen, which recomputes a score, never fetches them.

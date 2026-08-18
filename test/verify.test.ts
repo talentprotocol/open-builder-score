@@ -20,8 +20,8 @@ import {
   ATTEST_AGGREGATE_SCHEMA_UID,
   ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
   ATTEST_AGGREGATE_LEGACY_SCHEMA_UID,
-  encodeAggregateAttestationData,
 } from '@/lib/eas'
+import { encodeAggregateAttestationData } from '@/lib/eas-attest'
 import specJson from '../spec/spec.json'
 import type { ScoreResult, Spec } from '@/lib/types'
 

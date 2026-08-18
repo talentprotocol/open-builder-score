@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { AnimatePresence, motion } from 'motion/react'
 import { XIcon } from '@phosphor-icons/react/dist/ssr'
-import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 import { Button } from '@/components/ui/button'
 import { inputPath, scorePath } from '@/lib/routes'
@@ -12,12 +12,14 @@ import { looksLikeEnsName, resolveEnsName } from '@/lib/ens'
 import { GithubSignIn } from '@/components/github-sign-in'
 import { useGithubAuth } from '@/components/use-github-auth'
 import { FadeRise } from '@/components/motion/fade-rise'
+import { useHasWalletSession } from '@/lib/wallet'
 import { SPRING_SOFT } from '@/components/motion/presets'
+
+const WalletPrefill = dynamic(() => import('@/components/wallet/wallet-prefill'), { ssr: false })
 
 function ScoreForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { address: connected } = useAccount()
 
   const [addressInput, setAddressInput] = useState(() => searchParams.get('wallet') ?? '')
   const [githubInput, setGithubInput] = useState(() => searchParams.get('github') ?? '')
@@ -36,12 +38,15 @@ function ScoreForm() {
   // Prefill from the connected wallet only while the user hasn't typed in the
   // field. A prefill from query params counts as touched.
   const touched = useRef(addressInput !== '')
+  // The wallet stack is a lazy island; mount it only when a persisted wagmi
+  // session exists — with no session there is no address to prefill.
+  const walletSession = useHasWalletSession()
 
-  useEffect(() => {
-    if (!touched.current && addressInput === '' && connected) {
-      setAddressInput(connected)
+  function prefillFromWallet(address: string) {
+    if (!touched.current) {
+      setAddressInput((current) => (current === '' ? address : current))
     }
-  }, [connected, addressInput])
+  }
 
   const auth = useGithubAuth()
   // Prefill the handle from a verified session only while untouched — mirrors
@@ -96,6 +101,7 @@ function ScoreForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {walletSession && <WalletPrefill onAddress={prefillFromWallet} />}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="wallet" className="text-sm font-medium text-muted-foreground">
           Wallet address or ENS name

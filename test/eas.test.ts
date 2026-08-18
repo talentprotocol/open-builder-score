@@ -7,8 +7,8 @@ import {
   ATTEST_AGGREGATE_SCHEMA,
   ATTEST_AGGREGATE_SCHEMA_UID,
   ATTEST_AGGREGATE_VERIFY_URL_SCHEMA_UID,
-  encodeAggregateAttestationData,
 } from '@/lib/eas'
+import { encodeAggregateAttestationData } from '@/lib/eas-attest'
 
 describe('schema UID', () => {
   it('is deterministic keccak256(schema ++ resolver ++ revocable)', () => {
