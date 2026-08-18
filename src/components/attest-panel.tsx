@@ -72,12 +72,12 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
   const recipient = scored.address
   const extras = canonicalExtraWallets(recipient, scored.extraAddresses)
   const rows = [recipient, ...extras]
-  const isAggregate = extras.length > 0
+  const hasExtras = extras.length > 0
 
   // Loaded in an effect: localStorage is browser-only and this component SSRs.
   const [session, setSession] = useState<ProofSession | null>(null)
   useEffect(() => {
-    if (!isAggregate) return
+    if (!hasExtras) return
     // Deferred one microtask out: reading localStorage/Date.now is exactly the
     // kind of external-system sync effects exist for, but setting state from
     // their result must not happen synchronously in the effect body itself.
@@ -86,7 +86,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
     })
     // Canonical set is derived state; key it by its serialisation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAggregate, recipient, extras.join(',')])
+  }, [hasExtras, recipient, extras.join(',')])
 
   const proofFor = (w: string) => session?.proofs[w.toLowerCase()]
   const connectedLower = connected?.toLowerCase()
@@ -106,18 +106,17 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
     scored.githubHandle === null ||
     (auth !== null && auth.login.toLowerCase() === scored.githubHandle.toLowerCase())
 
-  // The attestation's claim is "this wallet signed for itself" — EAS records the
-  // attester as msg.sender. Checked here rather than with a SIWE message because
-  // the transaction signature is the proof, and unlike a browser-only
-  // personal_sign anyone can verify it afterwards.
+  // The attestation's claim is "these wallets signed for themselves" — EAS
+  // records the attester as msg.sender, which is the connected wallet's proof.
+  // For a solo score, setProved reduces to exactly "the connected wallet is
+  // the recipient": rows is [recipient] and there are no others to prove.
   const walletOwned =
     connected !== undefined && connected.toLowerCase() === recipient.toLowerCase()
 
   const onAttestChain = chainId === ATTEST_CHAIN_ID
   const computedAt = scored.gather.inputs.computedAt
-  const canAttest = isAggregate
-    ? dataComplete && handleVerified && onAttestChain && setProved && session !== null
-    : dataComplete && handleVerified && onAttestChain && walletOwned
+  const canAttest =
+    dataComplete && handleVerified && onAttestChain && setProved && (!hasExtras || session !== null)
 
   async function handleSwitch() {
     if (busy) return
@@ -238,7 +237,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
     if (!onAttestChain) return
     const changed = connectedLower !== prevConnected.current
     prevConnected.current = connectedLower
-    if (!changed || !isAggregate || !connectedLower || session === null) return
+    if (!changed || !hasExtras || !connectedLower || session === null) return
     if (signing || busy) return
     const mine = rows.find((w) => w.toLowerCase() === connectedLower)
     if (!mine || proofFor(mine)) return
@@ -252,7 +251,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
       void handleSign(mine)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectedLower, onAttestChain, session, isAggregate])
+  }, [connectedLower, onAttestChain, session, hasExtras])
 
   async function handleAttest() {
     if (!walletClient || busy || !canAttest) return
@@ -262,7 +261,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
       // Authoritative expiry check. Rendered as static text rather than driven by
       // a timer — a stale render costs one clear error, a timer costs a whole
       // class of time-coupled state bugs.
-      if (isAggregate) {
+      if (hasExtras) {
         if (session === null) return
         if (Math.floor(Date.now() / 1000) > session.issuedAt + OWNERSHIP_PROOF_TTL_SECONDS) {
           clearProofSession(localStorage, recipient, extras)
@@ -304,22 +303,23 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
       }
       // The EAS SDK + ethers load here, on the click that needs them —
       // they are the heaviest dependencies in the app and nothing else uses them.
-      const { attestScore, attestAggregateScore } = await import('@/lib/eas-attest')
-      const uid = isAggregate
-        ? await attestAggregateScore({
-            ...common,
-            extraWallets: extras,
-            ownershipProofs: extras.map((w) =>
-              w.toLowerCase() === connectedLower ? '0x' : session!.proofs[w.toLowerCase()],
-            ),
-            recipientProof:
-              recipient.toLowerCase() === connectedLower ? '0x' : session!.proofs[recipient.toLowerCase()],
-            proofsIssuedAt: session!.issuedAt,
-            // Only what was actually earned. 'unavailable' is not 'earned', and
-            // recording it as one would put an unverifiable claim onchain.
-            badges: scored.badges.filter((b) => b.state === 'earned').map((b) => b.slug),
-          })
-        : await attestScore(common)
+      // One schema for every set size: a solo score is the N=1 aggregate —
+      // extras empty, the sender is the recipient (canAttest guarantees it),
+      // its proof slot '0x', and no proof session, so proofs_issued_at is 0.
+      const { attestAggregateScore } = await import('@/lib/eas-attest')
+      const uid = await attestAggregateScore({
+        ...common,
+        extraWallets: extras,
+        ownershipProofs: extras.map((w) =>
+          w.toLowerCase() === connectedLower ? '0x' : session!.proofs[w.toLowerCase()],
+        ),
+        recipientProof:
+          recipient.toLowerCase() === connectedLower ? '0x' : session!.proofs[recipient.toLowerCase()],
+        proofsIssuedAt: session?.issuedAt ?? 0,
+        // Only what was actually earned. 'unavailable' is not 'earned', and
+        // recording it as one would put an unverifiable claim onchain.
+        badges: scored.badges.filter((b) => b.state === 'earned').map((b) => b.slug),
+      })
       setAttestationUid(uid)
     } catch (e) {
       const message = e instanceof Error ? e.message : null
@@ -341,7 +341,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs dark:bg-card/50">
       <h2 className="text-base font-medium">
-        Attest {isAggregate ? 'this aggregate score' : 'this score'} onchain
+        Attest {hasExtras ? 'this aggregate score' : 'this score'} onchain
       </h2>
       <p className="text-sm text-muted-foreground">
         You sign, you pay. The attestation embeds the spec version, score, and the as-of anchor
@@ -391,7 +391,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
         )}
       </div>
 
-      {isAggregate && dataComplete && handleVerified && (
+      {hasExtras && dataComplete && handleVerified && (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background/40 p-3">
           <h3 className="text-sm font-medium">Prove ownership</h3>
           <p className="text-sm text-muted-foreground">
@@ -477,7 +477,7 @@ function AttestPanelInner({ scored }: { scored: Scored }) {
         </div>
       )}
 
-      {isAggregate
+      {hasExtras
         ? connected &&
           !connectedInSet && (
             <p className="text-sm text-warning-text">

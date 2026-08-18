@@ -10,11 +10,8 @@ import { absoluteUrl, verifyWalletPath } from './routes'
 import {
   ATTEST_AGGREGATE_SCHEMA,
   ATTEST_AGGREGATE_SCHEMA_UID,
-  ATTEST_SCHEMA,
-  ATTEST_SCHEMA_UID,
   EAS_CONTRACT_ADDRESS,
   type AggregateAttestParams,
-  type AttestParams,
 } from './eas'
 
 function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner {
@@ -28,9 +25,8 @@ function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner {
 export function encodeAggregateAttestationData(
   params: Omit<AggregateAttestParams, 'walletClient' | 'recipient'> & { wallet: `0x${string}` },
 ): `0x${string}` {
-  if (params.extraWallets.length === 0) {
-    throw new Error('an aggregate attestation needs at least one extra wallet')
-  }
+  // extraWallets may be empty: a solo score is the N=1 set, where the sender
+  // is the recipient and msg.sender is the only proof (recipientProof '0x').
   if (params.extraWallets.length !== params.ownershipProofs.length) {
     throw new Error('every extra wallet needs exactly one ownership proof')
   }
@@ -92,33 +88,6 @@ export async function attestAggregateScore(
     data: {
       // The recipient anchors history and the percentile corpus the same way
       // it does for single-wallet attestations.
-      recipient: params.recipient,
-      expirationTime: NO_EXPIRATION,
-      revocable: true,
-      data,
-    },
-  })
-  return (await tx.wait()) as `0x${string}`
-}
-
-export async function attestScore(params: AttestParams): Promise<`0x${string}`> {
-  const signer = walletClientToSigner(params.walletClient)
-  const eas = new EAS(EAS_CONTRACT_ADDRESS)
-  eas.connect(signer)
-
-  const encoder = new SchemaEncoder(ATTEST_SCHEMA)
-  const data = encoder.encodeData([
-    { name: 'spec_version', value: params.specVersion, type: 'string' },
-    { name: 'wallet', value: params.recipient, type: 'address' },
-    { name: 'github_handle', value: params.githubHandle ?? '', type: 'string' },
-    { name: 'score', value: params.score, type: 'uint16' },
-    { name: 'computed_at', value: BigInt(params.computedAt), type: 'uint64' },
-    { name: 'block_number', value: params.blockNumber, type: 'uint64' },
-  ])
-
-  const tx = await eas.attest({
-    schema: ATTEST_SCHEMA_UID,
-    data: {
       recipient: params.recipient,
       expirationTime: NO_EXPIRATION,
       revocable: true,

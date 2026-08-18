@@ -320,7 +320,10 @@ function aggregateStructureProblems(decoded: DecodedScoreAttestation): string[] 
   const problems: string[] = []
   const { extraWallets, ownershipProofs } = decoded
 
-  if (extraWallets.length === 0) {
+  // Pre-v3 formats required at least one extra wallet. v3 (recognised by its
+  // proofs_issued_at anchor) allows the empty set: that is a solo attestation,
+  // where the sender is the recipient and msg.sender is the only proof.
+  if (extraWallets.length === 0 && decoded.proofsIssuedAt === null) {
     problems.push('aggregate attestation carries no extra wallets')
   }
   if (extraWallets.length !== ownershipProofs.length) {
@@ -418,7 +421,10 @@ export async function verifyAttestationOwnership(
   decoded: DecodedScoreAttestation,
   io: OwnershipIO = {},
 ): Promise<ProofCheck[]> {
-  if (decoded.extraWallets.length === 0) return []
+  // v3 records run the proof check at every set size, empty included: a solo
+  // record's recipient slot must still be the attester (or carry a real
+  // proof) — otherwise anyone could mint an empty-set record for any wallet
+  // and have it read as verified.
   if (decoded.proofsIssuedAt !== null) {
     return verifyOwnershipProofs(
       {
@@ -433,6 +439,9 @@ export async function verifyAttestationOwnership(
       io,
     )
   }
+  // Pre-v3 records: singles decode with an empty set and were never proof-
+  // bearing; calling them malformed retroactively would be wrong.
+  if (decoded.extraWallets.length === 0) return []
   return verifyLegacyOwnershipProofs(
     {
       primary: decoded.wallet,

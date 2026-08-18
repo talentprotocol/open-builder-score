@@ -6,7 +6,10 @@ import type { WalletClient } from 'viem'
 export const EAS_CONTRACT_ADDRESS = '0x4200000000000000000000000000000000000021' as const
 export const SCHEMA_REGISTRY_ADDRESS = '0x4200000000000000000000000000000000000020' as const
 
-// README-proposed schema. EAS canonical form: comma-separated, no spaces.
+// Legacy since 2026-08-18: every new attestation — solo included — uses
+// ATTEST_AGGREGATE_SCHEMA (a solo score is the N=1 set: no extras, the sender
+// is the recipient and its own proof). Kept for decoding Sepolia-era records.
+// EAS canonical form: comma-separated, no spaces.
 export const ATTEST_SCHEMA =
   'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number'
 
@@ -133,7 +136,6 @@ export interface AttestParams {
 // of routing them through the generic post-tx wallet-error mapping.
 export const AGGREGATE_PREFLIGHT_ERRORS: readonly string[] = [
   'wallet not connected',
-  'an aggregate attestation needs at least one extra wallet',
   'every extra wallet needs exactly one ownership proof',
   'every wallet needs a stored ownership proof or the attester exemption — a proof slot is missing or malformed',
   'exactly one wallet — the one sending the transaction — may rely on msg.sender as its proof',

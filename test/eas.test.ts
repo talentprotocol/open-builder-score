@@ -147,10 +147,17 @@ describe('encodeAggregateAttestationData', () => {
     ).toThrow(/proof/i)
   })
 
-  it('refuses to encode an aggregate with no extra wallets', () => {
-    expect(() =>
-      encodeAggregateAttestationData({ ...params, extraWallets: [], ownershipProofs: [] }),
-    ).toThrow(/extra wallet/i)
+  it('encodes a solo attestation — the N=1 set with no extras and no proofs', () => {
+    const data = encodeAggregateAttestationData({
+      ...params,
+      extraWallets: [],
+      ownershipProofs: [],
+      recipientProof: '0x',
+    })
+    const decoded = decodeAbiParameters(parseAbiParameters(ATTEST_AGGREGATE_SCHEMA), data)
+    expect(decoded[2]).toEqual([]) // extra_wallets
+    expect(decoded[3]).toEqual([]) // ownership_proofs
+    expect(decoded[4]).toBe('0x') // recipient proof: msg.sender is the proof
   })
 
   it('encodes a real recipient proof when an extra is the sender', () => {

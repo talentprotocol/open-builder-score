@@ -12,22 +12,40 @@ import {
 } from '@/lib/percentile'
 
 const PARAMS = parseAbiParameters(
-  'string spec_version,address wallet,string github_handle,uint16 score,uint64 computed_at,uint64 block_number',
+  'string spec_version,address wallet,address[] extra_wallets,bytes[] ownership_proofs,bytes recipient_ownership_proof,uint64 proofs_issued_at,string github_handle,uint16 score,uint64 computed_at,uint64 block_number,string verify_url,string[] badges',
 )
 
-function encodedData(score: number, specVersion: string = specJson.version): `0x${string}` {
+// Solo records — N=1 aggregates — unless extras are passed; the corpus keeps
+// solo rows only, so multi-wallet fixtures exercise the exclusion.
+function encodedData(
+  score: number,
+  specVersion: string = specJson.version,
+  extras: `0x${string}`[] = [],
+): `0x${string}` {
   return encodeAbiParameters(PARAMS, [
     specVersion,
     '0x0000000000000000000000000000000000000001',
+    extras,
+    extras.map(() => `0x${'11'.repeat(65)}` as `0x${string}`),
+    '0x',
+    0n,
     '',
     score,
     1n,
     2n,
+    '',
+    [],
   ])
 }
 
-function row(recipient: string, score: number, timeCreated: number, specVersion?: string) {
-  return { id: `uid-${recipient}-${timeCreated}`, recipient, timeCreated, data: encodedData(score, specVersion) }
+function row(
+  recipient: string,
+  score: number,
+  timeCreated: number,
+  specVersion?: string,
+  extras: `0x${string}`[] = [],
+) {
+  return { id: `uid-${recipient}-${timeCreated}`, recipient, timeCreated, data: encodedData(score, specVersion, extras) }
 }
 
 function pageResponse(rows: unknown[]): Response {
@@ -42,6 +60,19 @@ const entry = (recipient: string, score: number, timeCreated: number, specVersio
 })
 
 describe('parseCorpusPage', () => {
+  it('keeps solo rows only — multi-wallet aggregates are not like-for-like', () => {
+    const raw = {
+      data: {
+        attestations: [
+          row('0xaaa', 100, 1),
+          row('0xbbb', 200, 2, undefined, ['0x00000000000000000000000000000000000000A1' as `0x${string}`]),
+        ],
+      },
+    }
+    const entries = parseCorpusPage(raw)!
+    expect(entries.map((e) => e.recipient)).toEqual(['0xaaa'])
+  })
+
   it('parses rows and lowercases recipients', () => {
     const parsed = parseCorpusPage({ data: { attestations: [row('0xAbC0000000000000000000000000000000000001', 141, 10)] } })
     expect(parsed).toEqual([entry('0xabc0000000000000000000000000000000000001', 141, 10)])

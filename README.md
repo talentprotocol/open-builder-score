@@ -7,6 +7,8 @@ on Base. No backend, no database of people, no accounts.
 
 **Live at [the-final-app-wine.vercel.app](https://the-final-app-wine.vercel.app)** — attestations on **Base mainnet**
 (registered 2026-08-18 via `scripts/register-schemas.mjs`; the POC ran on Base Sepolia, whose records this app no longer reads).
+One schema for every attestation since 2026-08-18: a solo score is the N=1 aggregate — no extras, the sender is the
+recipient and msg.sender is its proof. The single-wallet schema is decode-only legacy.
 
 Context docs (internal):
 

@@ -63,8 +63,10 @@ const ALL_ENTRIES = [
   },
   {
     uid: SINGLE_UID,
-    name: 'Open Builder Score',
+    name: 'Open Builder Score (legacy)',
     description:
+      'Legacy schema - since 2026-08-18 every new attestation, single-wallet included, uses the ' +
+      'aggregate schema (a solo score is the N=1 set). ' +
       'Single-wallet Builder Score from Open Builder Score, by Talent Protocol. ' +
       'The score is computed in the browser from public data and can be recomputed by anyone ' +
       'from spec_version, computed_at and block_number. The attester is the scored wallet ' +
