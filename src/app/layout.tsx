@@ -29,6 +29,10 @@ export const metadata: Metadata = {
   title: "Open Builder Score",
   description:
     "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol.",
+  other: {
+    // base.dev ownership proof — ties this domain to our registered Base app.
+    "base:app_id": "69395f4ae6be54f5ed71d501",
+  },
 };
 
 export default function RootLayout({
