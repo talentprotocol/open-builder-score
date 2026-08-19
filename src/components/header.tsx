@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
-import { PingDot } from '@/components/motion/ping-dot'
 import { Button } from '@/components/ui/button'
 import { useHasWalletSession } from '@/lib/wallet'
 
@@ -31,7 +30,6 @@ export function Header() {
           {/* Same lockup as the talent.app navbar (TalentProtocolLogo there is
               this exact SVG): the t glyph with the talent word, no app name. */}
           <TalentWordmark className="h-4 w-auto" />
-          <PingDot settled />
         </Link>
         {clicked || session ? (
           <HeaderConnect autoOpen={clicked} />
