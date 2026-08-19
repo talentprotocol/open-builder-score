@@ -30,7 +30,7 @@ function CtaInner({ autoStart }: { autoStart: boolean }) {
   const modalWasOpen = useRef(false)
   const started = useRef(false)
 
-  // The island mounted because the visitor clicked "Check your score" — honor
+  // The island mounted because the visitor clicked "Calculate Score" — honor
   // that click as soon as the modal can open, or immediately if a persisted
   // session already reconnected.
   useEffect(() => {
@@ -69,5 +69,5 @@ function CtaInner({ autoStart }: { autoStart: boolean }) {
     openConnectModal?.()
   }
 
-  return <Button onClick={handleClick}>Check your score</Button>
+  return <Button onClick={handleClick}>Calculate Score</Button>
 }

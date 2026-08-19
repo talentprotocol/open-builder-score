@@ -6,14 +6,15 @@ import { scannedChainCount } from '@/lib/credential-reference'
 import { credentialsPath } from '@/lib/routes'
 import { LandingCta } from '@/components/landing-cta'
 import { HeroScan } from '@/components/hero-scan'
+import { Leaderboard } from '@/components/leaderboard'
 import { FadeRise } from '@/components/motion/fade-rise'
 
 const spec = specJson as Spec
 
 export const metadata: Metadata = {
-  title: 'Builder Score — an open score anyone can compute',
+  title: 'Check Your Builder Score | Talent Protocol',
   description:
-    'An open Builder Score anyone can compute in their browser from public onchain and GitHub data — with the exact math behind every point, attestable on Base.',
+    'Calculate a score based on your public GitHub and blockchain activity. Fully transparent and runs in your browser. No account required.',
 }
 
 const VALUE_PROPS: { title: string; body: string; link?: { href: string; label: string } }[] = [
@@ -45,11 +46,11 @@ export default function Landing() {
       <section className="flex flex-col items-start gap-10 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-4">
           <h1 className="font-heading text-2xl font-normal tracking-tight">
-            A builder score you don&apos;t have to trust.
+            Calculate your Builder Score and put it onchain.
           </h1>
           <p className="max-w-xl text-muted-foreground">
-            An open score anyone can compute — explainable, computed in your browser from public
-            data, and attestable onchain.
+            Turn your public GitHub and blockchain activity into a verified reputation score.
+            Everything runs in your browser using open rules, with no account required.
           </p>
           <LandingCta />
         </div>
@@ -75,6 +76,10 @@ export default function Landing() {
             </div>
           ))}
         </section>
+      </FadeRise>
+
+      <FadeRise whileInView>
+        <Leaderboard />
       </FadeRise>
 
       <FadeRise whileInView>

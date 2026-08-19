@@ -65,6 +65,7 @@ export function parseLatestResponse(raw: unknown): LatestResult {
 
 export async function fetchLatestAttestations(
   fetchFn: typeof fetch = fetch,
+  options: { take?: number } = {},
 ): Promise<LatestResult> {
   try {
     const response = await fetchFn(EASSCAN_GRAPHQL, {
@@ -72,7 +73,7 @@ export async function fetchLatestAttestations(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: LATEST_QUERY,
-        variables: { schema_id: ATTEST_AGGREGATE_SCHEMA_UID, take: LATEST_TAKE },
+        variables: { schema_id: ATTEST_AGGREGATE_SCHEMA_UID, take: options.take ?? LATEST_TAKE },
       }),
     })
     if (!response.ok) return { status: 'error' }

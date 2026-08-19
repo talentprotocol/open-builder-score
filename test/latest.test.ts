@@ -123,6 +123,15 @@ describe('fetchLatestAttestations', () => {
     expect(body).toContain(LATEST_QUERY.slice(0, 20))
     expect(body).toContain(`"take":${LATEST_TAKE}`)
   })
+  it('honors a take override', async () => {
+    let body = ''
+    const fakeFetch = (async (_url: unknown, init?: RequestInit) => {
+      body = String(init?.body)
+      return new Response(JSON.stringify({ data: { attestations: [] } }), { status: 200 })
+    }) as typeof fetch
+    await fetchLatestAttestations(fakeFetch, { take: 200 })
+    expect(body).toContain('"take":200')
+  })
   it('maps HTTP and network failures to error', async () => {
     const httpFail = (async () => new Response('nope', { status: 500 })) as typeof fetch
     expect((await fetchLatestAttestations(httpFail)).status).toBe('error')
