@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { fetchLatestAttestations, type LatestAttestation } from '@/lib/latest'
 import { buildLeaderboard, LEADERBOARD_TAKE } from '@/lib/leaderboard'
 import { attestationsPath, inputPath, verifyPath } from '@/lib/routes'
+import { useDisplayNames } from '@/components/use-display-names'
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 
@@ -15,6 +16,7 @@ type State =
 
 export function Leaderboard() {
   const [state, setState] = useState<State>({ phase: 'loading' })
+  const names = useDisplayNames(state.phase === 'ready' ? state.rows.map((r) => r.recipient) : [])
 
   useEffect(() => {
     let cancelled = false
@@ -104,7 +106,11 @@ export function Leaderboard() {
                 className="border-b border-border transition-colors last:border-b-0 hover:bg-accent/60"
               >
                 <td className="py-2.5 font-mono text-sm text-muted-foreground">{i + 1}</td>
-                <td className="py-2.5 font-mono">{short(row.recipient)}</td>
+                <td className="truncate py-2.5 pr-2">
+                  {names[row.recipient.toLowerCase()] ?? (
+                    <span className="font-mono">{short(row.recipient)}</span>
+                  )}
+                </td>
                 <td className="py-2.5 tabular-nums">{row.score} pts</td>
                 <td className="py-2.5 tabular-nums text-muted-foreground">
                   {new Date(row.timeCreated * 1000).toISOString().slice(0, 10)}
