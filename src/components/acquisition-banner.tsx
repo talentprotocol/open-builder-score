@@ -1,6 +1,6 @@
-// Set to the acquisition announcement post once it's published — the banner
-// becomes a link opening in a new tab; until then it renders as plain text.
-const ANNOUNCEMENT_URL: string | null = null
+// The acquisition announcement post; the banner links to it in a new tab.
+const ANNOUNCEMENT_URL: string | null =
+  'https://paragraph.com/@talent/talent-protocol-5-years-building-for-builders'
 
 const MESSAGE = 'Talent Protocol was acquired by IPTS, with support from Protocol Labs →'
 
