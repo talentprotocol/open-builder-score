@@ -6,7 +6,7 @@ import { credentialsPath } from '@/lib/routes'
 import { FadeRise } from '@/components/motion/fade-rise'
 
 export const metadata: Metadata = {
-  title: 'Badges — Open Builder Score',
+  title: 'Badges — Builder Score',
   description: 'What each badge means and how it is checked. Badges carry no points.',
 }
 

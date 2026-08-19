@@ -4,8 +4,8 @@ import { privacyPath } from '@/lib/routes'
 import { FadeRise } from '@/components/motion/fade-rise'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Open Builder Score',
-  description: 'The terms under which the Open Builder Score public-good app is provided.',
+  title: 'Terms of Service — Builder Score',
+  description: 'The terms under which the Builder Score public-good app is provided.',
 }
 
 const CONTACT = 'contact@talentprotocol.com'
@@ -27,7 +27,7 @@ export default function TermsPage() {
       <FadeRise className="flex flex-col gap-2">
         <h1 className="font-heading text-xl font-normal">Terms of Service</h1>
         <p className={p}>
-          Effective 19 August 2026. Open Builder Score is operated by Reputation DAO LLC
+          Effective 19 August 2026. The Builder Score app is operated by Reputation DAO LLC
           (&ldquo;Talent Protocol&rdquo;, &ldquo;we&rdquo;) as a free public good.
         </p>
       </FadeRise>
@@ -35,7 +35,7 @@ export default function TermsPage() {
       <FadeRise whileInView className="flex flex-col gap-8">
         <Section title="What this service is">
           <p className={p}>
-            Open Builder Score computes an explainable Builder Score in your browser from public
+            The app computes an explainable Builder Score in your browser from public
             data — onchain activity and public GitHub metrics. There are no accounts and no fees.
             The scoring logic is open source and anyone can recompute any score from the same
             public inputs.

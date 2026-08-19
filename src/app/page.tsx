@@ -11,7 +11,7 @@ import { FadeRise } from '@/components/motion/fade-rise'
 const spec = specJson as Spec
 
 export const metadata: Metadata = {
-  title: 'Open Builder Score — an open score anyone can compute',
+  title: 'Builder Score — an open score anyone can compute',
   description:
     'An open Builder Score anyone can compute in their browser from public onchain and GitHub data — with the exact math behind every point, attestable on Base.',
 }

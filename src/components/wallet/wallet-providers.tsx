@@ -20,7 +20,7 @@ import { WALLETCONNECT_PROJECT_ID } from '@/lib/wallet'
 // and query client are module-scoped, so every island shares one wagmi store:
 // connecting in one updates them all.
 const config = getDefaultConfig({
-  appName: 'Open Builder Score',
+  appName: 'Builder Score',
   projectId: WALLETCONNECT_PROJECT_ID,
   chains: [base],
   // Islands mount client-only (next/dynamic, ssr: false), so there is no
