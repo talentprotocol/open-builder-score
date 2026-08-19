@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { AcquisitionBanner } from '@/components/acquisition-banner'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { TalentWordmark } from '@/components/brand/talent-wordmark'
@@ -42,6 +43,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-1 flex-col">
+      <AcquisitionBanner />
       <Header />
       {children}
       <Footer />
