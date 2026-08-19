@@ -43,8 +43,8 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-1 flex-col">
-      <AcquisitionBanner />
       <Header />
+      <AcquisitionBanner />
       {children}
       <Footer />
     </div>
