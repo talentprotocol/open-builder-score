@@ -11,7 +11,7 @@ const LandingCtaWallet = dynamic(() => import('@/components/wallet/landing-cta-i
   ssr: false,
   loading: () => (
     <Button disabled aria-busy>
-      Check your score
+      Calculate Score
     </Button>
   ),
 })
@@ -28,13 +28,13 @@ export function LandingCta() {
       {clicked || session ? (
         <LandingCtaWallet autoStart={clicked} />
       ) : (
-        <Button onClick={() => setClicked(true)}>Check your score</Button>
+        <Button onClick={() => setClicked(true)}>Calculate Score</Button>
       )}
       <Link
         href={inputPath()}
         className="text-base text-muted-foreground underline transition-colors hover:text-foreground"
       >
-        or check any address
+        Check other builders
       </Link>
     </div>
   )

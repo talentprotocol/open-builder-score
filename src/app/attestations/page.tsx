@@ -11,6 +11,7 @@ import {
   type AttestationSortKey,
 } from '@/lib/attestations-table'
 import { fetchLatestAttestations, type LatestAttestation } from '@/lib/latest'
+import { useDisplayNames } from '@/components/use-display-names'
 import { inputPath, verifyPath } from '@/lib/routes'
 import { FadeRise } from '@/components/motion/fade-rise'
 import { PingDot } from '@/components/motion/ping-dot'
@@ -64,6 +65,9 @@ export default function AttestationsPage() {
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [sortKey, setSortKey] = useState<AttestationSortKey>('date')
   const [sortDir, setSortDir] = useState<AttestationSortDir>('desc')
+  const names = useDisplayNames(
+    state.phase === 'ready' ? state.attestations.map((a) => a.recipient) : [],
+  )
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -187,7 +191,11 @@ export default function AttestationsPage() {
                     key={a.uid}
                     className="border-b border-border transition-colors last:border-b-0 hover:bg-accent/60"
                   >
-                    <td className="py-2.5 font-mono">{short(a.recipient)}</td>
+                    <td className="truncate py-2.5 pr-2">
+                      {names[a.recipient.toLowerCase()] ?? (
+                        <span className="font-mono">{short(a.recipient)}</span>
+                      )}
+                    </td>
                     <td className="py-2.5 tabular-nums">{a.score} pts</td>
                     <td className="py-2.5 tabular-nums text-muted-foreground">
                       {new Date(a.timeCreated * 1000).toISOString().slice(0, 10)}
