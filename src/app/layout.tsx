@@ -26,7 +26,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Hardcoded origin so OG/canonical tags survive a preview deployment.
   metadataBase: new URL(SITE_ORIGIN),
-  title: "Open Builder Score",
+  title: "Builder Score",
   description:
     "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol.",
   other: {

@@ -7,7 +7,7 @@ import { TalentWordmark } from '@/components/brand/talent-wordmark'
 
 // The data-transfer opt-out flow (`/data-opt-out` and its
 // `confirm/[token]` subtree) is a legal consent flow a recipient reaches
-// from an email, not from browsing the app. The Open Builder Score
+// from an email, not from browsing the app. The Builder Score
 // navbar/footer there would show an unfamiliar product brand plus links
 // inviting the recipient away from the decision — exactly the shape people
 // are trained to read as phishing. So these two routes render a bare shell

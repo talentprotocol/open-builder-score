@@ -4,9 +4,9 @@ import { termsPath } from '@/lib/routes'
 import { FadeRise } from '@/components/motion/fade-rise'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Open Builder Score',
+  title: 'Privacy Policy — Builder Score',
   description:
-    'What Open Builder Score processes, where it happens, and the one thing we store: data-transfer opt-outs.',
+    'What the Builder Score app processes, where it happens, and the one thing we store: data-transfer opt-outs.',
 }
 
 const CONTACT = 'contact@talentprotocol.com'

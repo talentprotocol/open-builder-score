@@ -5,7 +5,7 @@ import { SITE_ORIGIN, dataOptOutPath } from '@/lib/routes'
 // optout.talentprotocol.com points at this same Vercel project as every
 // other host (the *.vercel.app domains, preview deployments, localhost),
 // but it must only ever serve the data-transfer opt-out flow — not the rest
-// of the Open Builder Score product living behind it. Everything else on
+// of the Builder Score product living behind it. Everything else on
 // that one host redirects to the main site instead. No other host is
 // touched by this file.
 const OPT_OUT_HOST = 'optout.talentprotocol.com'

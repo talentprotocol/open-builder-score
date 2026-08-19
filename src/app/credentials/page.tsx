@@ -24,7 +24,7 @@ const maxTotal = groups.reduce((n, g) => n + g.maxTotal, 0)
 // credential is accounted for — this page just no longer argues either case.
 
 export const metadata: Metadata = {
-  title: 'Builder Score credentials — Open Builder Score',
+  title: 'Credentials — Builder Score',
   description: `Every credential in the open Builder Score: what it measures, the exact formula, and the points it can earn — ${maxTotal} max.`,
 }
 
