@@ -26,6 +26,11 @@ const geistMono = Geist_Mono({
 const DESCRIPTION =
   "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol."
 
+// Kept under 125 characters: X and Slack truncate a social description around
+// there on mobile, where the page description's ~155 has room to breathe.
+const SOCIAL_DESCRIPTION =
+  "Enter a wallet, get a Builder Score computed in your browser from public GitHub and onchain data. No account required."
+
 export const metadata: Metadata = {
   // Hardcoded origin so OG/canonical tags survive a preview deployment.
   metadataBase: new URL(SITE_ORIGIN),
@@ -38,12 +43,12 @@ export const metadata: Metadata = {
     siteName: "Talent Protocol",
     url: SITE_ORIGIN,
     title: "Builder Score",
-    description: DESCRIPTION,
+    description: SOCIAL_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
     title: "Builder Score",
-    description: DESCRIPTION,
+    description: SOCIAL_DESCRIPTION,
   },
   other: {
     // base.dev ownership proof — ties this domain to our registered Base app.
