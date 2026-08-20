@@ -23,12 +23,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION =
+  "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol."
+
 export const metadata: Metadata = {
   // Hardcoded origin so OG/canonical tags survive a preview deployment.
   metadataBase: new URL(SITE_ORIGIN),
   title: "Builder Score",
-  description:
-    "An open Builder Score anyone can compute: enter a wallet and get an explainable score, computed in your browser from public data. Built by Talent Protocol.",
+  description: DESCRIPTION,
+  // The image itself comes from app/opengraph-image.tsx, which Next resolves
+  // into og:image and twitter:image for every route that doesn't set its own.
+  openGraph: {
+    type: "website",
+    siteName: "Talent Protocol",
+    url: SITE_ORIGIN,
+    title: "Builder Score",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Builder Score",
+    description: DESCRIPTION,
+  },
   other: {
     // base.dev ownership proof — ties this domain to our registered Base app.
     "base:app_id": "69395f4ae6be54f5ed71d501",
