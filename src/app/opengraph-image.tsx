@@ -13,6 +13,9 @@ export const alt =
   'Open Builder Score — every point comes with the exact formula that produced it. talentprotocol.com'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
+// The card is spec.json + fonts — no request data. Force the static path so
+// Satori never reruns on Fluid CPU for every crawler that wants a preview.
+export const dynamic = 'force-static'
 
 const spec = specJson as Spec
 

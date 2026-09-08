@@ -203,6 +203,7 @@ export default function AttestationsPage() {
                     <td className="py-2.5 text-right">
                       <Link
                         href={verifyPath(a.uid)}
+                        prefetch={false}
                         className="text-sm text-success-text underline"
                       >
                         Verify →
