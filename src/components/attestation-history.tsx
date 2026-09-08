@@ -42,6 +42,7 @@ export function AttestationHistory({ wallet }: { wallet: `0x${string}` }) {
             </span>
             <Link
               href={verifyPath(a.uid)}
+              prefetch={false}
               className="shrink-0 text-sm text-success-text underline"
             >
               Verify →

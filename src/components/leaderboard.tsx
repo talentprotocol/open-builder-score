@@ -116,7 +116,14 @@ export function Leaderboard() {
                   {new Date(row.timeCreated * 1000).toISOString().slice(0, 10)}
                 </td>
                 <td className="py-2.5 text-right">
-                  <Link href={verifyPath(row.uid)} className="text-sm text-success-text underline">
+                  <Link
+                    href={verifyPath(row.uid)}
+                    // Ten unique `/verify/[uid]` RSC prefetches per homepage
+                    // visit was the bulk of Fluid CPU. The page is client-only
+                    // anyway — waiting for click is cheaper than warming ten.
+                    prefetch={false}
+                    className="text-sm text-success-text underline"
+                  >
                     Verify →
                   </Link>
                 </td>
